@@ -35,13 +35,13 @@ class Glass extends BaseGlass {
   static type = 'Glass';
   static isOptical = true;
   static mergesWithGlass = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseGlass.mergeGlassSerializable({
     path: [],
     notDone: false,
     refIndex: 1.5,
     cauchyB: 0.004,
     partialReflect: true
-  };
+  });
 
   static getDescription(objData, scene, detailed = false) {
     return i18next.t('main:meta.parentheses', { main: i18next.t('main:tools.categories.glass'), sub: i18next.t('main:tools.Glass.title') });
@@ -669,6 +669,49 @@ class Glass extends BaseGlass {
     }
 
     return { s_point: s_point, normal: { x: normal_x, y: normal_y }, incidentType: incidentType };
+  }
+
+  pointStrictlyInside(point) {
+    if (this.notDone || !this.path?.length) return false;
+    if (this.path.some((p) => p.arc)) return false;
+    const tol = Simulator.MIN_RAY_SEGMENT_LENGTH * this.scene.lengthScale;
+    if (this._linePolyIsOnBoundary(point, tol)) return false;
+    return this._linePolyCountIntersectionsHorizontal(point, tol) % 2 === 1;
+  }
+
+  _linePolyIsOnBoundary(p3, tol) {
+    for (let i = 0; i < this.path.length; i++) {
+      if (this.path[(i + 1) % this.path.length].arc || this.path[i % this.path.length].arc) continue;
+      const p1 = this.path[i];
+      const p2 = this.path[(i + 1) % this.path.length];
+      const p1_p2 = geometry.point(p2.x - p1.x, p2.y - p1.y);
+      const p1_p3 = geometry.point(p3.x - p1.x, p3.y - p1.y);
+      if (geometry.cross(p1_p2, p1_p3) - tol < 0 && geometry.cross(p1_p2, p1_p3) + tol > 0) {
+        const dot_p2_p3 = geometry.dot(p1_p2, p1_p3);
+        const p1_p2_squared = geometry.distanceSquared(p1, p2);
+        if (p1_p2_squared - dot_p2_p3 + tol >= 0 && dot_p2_p3 + tol >= 0) return true;
+      }
+    }
+    return false;
+  }
+
+  _linePolyCountIntersectionsHorizontal(p3, tol) {
+    let cnt = 0;
+    for (let i = 0; i < this.path.length; i++) {
+      if (this.path[(i + 1) % this.path.length].arc || this.path[i % this.path.length].arc) continue;
+      const p1 = this.path[i];
+      const p2 = this.path[(i + 1) % this.path.length];
+      const y_max = Math.max(p1.y, p2.y);
+      const y_min = Math.min(p1.y, p2.y);
+      if ((y_max - p3.y - tol > 0 && y_max - p3.y + tol > 0) && (y_min - p3.y - tol < 0 && y_min - p3.y + tol < 0)) {
+        if (p1.x == p2.x && (p1.x - p3.x + tol > 0 && p1.x - p3.x - tol > 0)) {
+          cnt++;
+        } else if ((p1.x + ((p3.y - p1.y) / (p2.y - p1.y)) * (p2.x - p1.x)) - p3.x - tol > 0 && (p1.x + ((p3.y - p1.y) / (p2.y - p1.y)) * (p2.x - p1.x)) - p3.x + tol > 0) {
+          cnt++;
+        }
+      }
+    }
+    return cnt;
   }
 };
 

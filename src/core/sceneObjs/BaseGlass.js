@@ -17,6 +17,11 @@
 import BaseSceneObj from './BaseSceneObj.js';
 import i18next from 'i18next';
 import geometry from '../geometry.js';
+import Simulator from '../Simulator.js';
+import { combinedRefIndex } from '../surfaceMerge.js';
+import { nFromMaterialOrCauchy } from '../materials/evaluateMaterial.js';
+import { hasSpectralPlotContent } from '../spectralPlotSampler.js';
+import { dispatchOpenSpectralPlot } from '../spectralPlotEvents.js';
 
 /**
  * The base class for glasses.
@@ -24,8 +29,22 @@ import geometry from '../geometry.js';
  * @extends BaseSceneObj
  * @property {number} refIndex - The refractive index of the glass, or the Cauchy coefficient A of the glass if "Simulate Colors" is on.
  * @property {number} cauchyB - The Cauchy coefficient B of the glass if "Simulate Colors" is on, in micrometer squared.
+ * @property {string} materialId - Optional key in scene.materialLibrary for n(λ); empty uses Cauchy coefficients.
+ * @property {number} stackPriority - When interiors overlap, higher priority wins for the effective index at shared boundaries.
  */
 class BaseGlass extends BaseSceneObj {
+
+  /**
+   * @param {Object} extra - Subclass-specific serializable defaults
+   * @returns {Object}
+   */
+  static mergeGlassSerializable(extra) {
+    return {
+      materialId: '',
+      stackPriority: 0,
+      ...extra
+    };
+  }
 
   static getPropertySchema(objData, scene) {
     return [
@@ -33,28 +52,57 @@ class BaseGlass extends BaseSceneObj {
         label: i18next.t('main:meta.parentheses', { main: i18next.t('simulator:sceneObjs.BaseGlass.refIndex'), sub: i18next.t('simulator:sceneObjs.BaseGlass.cauchyCoeff') + ' A' }),
         info: '<p>' + i18next.t('simulator:sceneObjs.BaseGlass.refIndexInfo.dualMeaning') + '</p><p>*' + i18next.t('simulator:sceneObjs.BaseGlass.refIndexInfo.relative') + '</p><p>' + i18next.t('simulator:sceneObjs.BaseGlass.refIndexInfo.effective') + '</p>' },
       { key: 'cauchyB', type: 'number', label: i18next.t('simulator:sceneObjs.BaseGlass.cauchyCoeff') + ' B (μm²)' },
+      { key: 'materialId', type: 'text', label: 'Material ID (library)' },
+      { key: 'stackPriority', type: 'number', label: 'Stack priority' },
       { key: 'partialReflect', type: 'boolean', label: i18next.t('simulator:sceneObjs.BaseGlass.partialReflect') },
     ];
   }
 
   populateObjBar(objBar) {
+    const matKeys = Object.keys(this.scene.materialLibrary || {}).sort();
+    if (matKeys.length) {
+      const opts = { '': '(Cauchy A/B)' };
+      for (const k of matKeys) {
+        opts[k] = k;
+      }
+      objBar.createDropdown('Material preset', this.materialId || '', opts, function (obj, value) {
+        obj.materialId = value;
+      }, '<p>Use a material from the scene library (n vs λ), or leave empty for Cauchy coefficients.</p><p>When several glasses overlap, the highest stack priority sets the effective index.</p>');
+    }
+
     if (this.scene.simulateColors) {
-      objBar.createNumber(i18next.t('simulator:sceneObjs.BaseGlass.cauchyCoeff') + " A", 1, 3, 0.01, this.refIndex, function (obj, value) {
-        obj.refIndex = value * 1;
-      }, '<p>*' + i18next.t('simulator:sceneObjs.BaseGlass.refIndexInfo.relative') + '</p><p>' + i18next.t('simulator:sceneObjs.BaseGlass.refIndexInfo.effective') + '</p>');
-      objBar.createNumber("B(μm²)", 0.0001, 0.02, 0.0001, this.cauchyB, function (obj, value) {
-        obj.cauchyB = value;
-      });
+      if (!this.materialId) {
+        objBar.createNumber(i18next.t('simulator:sceneObjs.BaseGlass.cauchyCoeff') + " A", 1, 3, 0.01, this.refIndex, function (obj, value) {
+          obj.refIndex = value * 1;
+        }, '<p>*' + i18next.t('simulator:sceneObjs.BaseGlass.refIndexInfo.relative') + '</p><p>' + i18next.t('simulator:sceneObjs.BaseGlass.refIndexInfo.effective') + '</p>');
+        objBar.createNumber("B(μm²)", 0.0001, 0.02, 0.0001, this.cauchyB, function (obj, value) {
+          obj.cauchyB = value;
+        });
+      }
     } else {
       objBar.createNumber(i18next.t('simulator:sceneObjs.BaseGlass.refIndex') + '*', 0.5, 2.5, 0.01, this.refIndex, function (obj, value) {
         obj.refIndex = value * 1;
       }, '<p>*' + i18next.t('simulator:sceneObjs.BaseGlass.refIndexInfo.relative') + '</p><p>' + i18next.t('simulator:sceneObjs.BaseGlass.refIndexInfo.effective') + '</p>');
     }
+    objBar.createNumber('Stack priority', -1000, 1000, 1, this.stackPriority, function (obj, value) {
+      obj.stackPriority = value;
+    }, '<p>Higher wins when multiple glasses share the same boundary.</p>');
 
     if (objBar.showAdvanced(!this.arePropertiesDefault(['partialReflect']))) {
       objBar.createBoolean(i18next.t('simulator:sceneObjs.BaseGlass.partialReflect'), this.partialReflect, function (obj, value) {
         obj.partialReflect = value;
       });
+    }
+
+    if (this.scene.simulateColors && hasSpectralPlotContent(this.scene, this)) {
+      objBar.createButton(
+        'Spectral plot…',
+        function (obj) {
+          dispatchOpenSpectralPlot(obj.scene, obj);
+        },
+        false,
+        null
+      );
     }
   }
 
@@ -160,23 +208,62 @@ class BaseGlass extends BaseSceneObj {
    */
   refract(ray, rayIndex, incidentPoint, normal, n1, surfaceMergingObjs, bodyMergingObj) {
 
-    // Surface merging
+    // Classify handler + merged glasses before mutating ray state (onRayEnter/Exit).
+    const exiting = [];
+    const entering = [];
+    const persistent = [];
+    const participants = [this, ...surfaceMergingObjs];
+    for (let pi = 0; pi < participants.length; pi++) {
+      const g = participants[pi];
+      const incidentType = g.getIncidentType(ray);
+      if (incidentType === 1) {
+        exiting.push(g);
+      } else if (incidentType === -1) {
+        entering.push(g);
+      } else if (incidentType === 0) {
+        persistent.push(g);
+      } else {
+        return {
+          isAbsorbed: true,
+          isUndefinedBehavior: true
+        };
+      }
+    }
+
+    // Snell ratio n_in / n_out (see vector form below): one effective index per side from stack
+    // priority (combinedRefIndex), not a product. Prefer epsilon probes along the incoming ray so
+    // nested media (e.g. water around water) resolve correctly even when only one boundary is merged.
+    var ray_len = Math.sqrt((ray.p2.x - ray.p1.x) * (ray.p2.x - ray.p1.x) + (ray.p2.y - ray.p1.y) * (ray.p2.y - ray.p1.y));
+    if (ray_len < Simulator.MIN_RAY_SEGMENT_LENGTH * this.scene.lengthScale) {
+      return {
+        isAbsorbed: true,
+        isUndefinedBehavior: true
+      };
+    }
+    let ux = (ray.p2.x - ray.p1.x) / ray_len;
+    let uy = (ray.p2.y - ray.p1.y) / ray_len;
+    const eps = 100 * Simulator.MIN_RAY_SEGMENT_LENGTH * this.scene.lengthScale;
+    const pBefore = geometry.point(incidentPoint.x - eps * ux, incidentPoint.y - eps * uy);
+    const pAfter = geometry.point(incidentPoint.x + eps * ux, incidentPoint.y + eps * uy);
+    const beforeG = BaseGlass.collectHomogeneousGlassesContainingPoint(this.scene, pBefore);
+    const afterG = BaseGlass.collectHomogeneousGlassesContainingPoint(this.scene, pAfter);
+    let n_inc = combinedRefIndex(beforeG, incidentPoint, ray, this.scene);
+    let n_trans = combinedRefIndex(afterG, incidentPoint, ray, this.scene);
+    if (beforeG.length === 0 && afterG.length === 0) {
+      n_inc = combinedRefIndex([...exiting, ...persistent], incidentPoint, ray, this.scene);
+      n_trans = combinedRefIndex([...entering, ...persistent], incidentPoint, ray, this.scene);
+    }
+    n1 = n_inc / n_trans;
+
     for (var i = 0; i < surfaceMergingObjs.length; i++) {
       let incidentType = surfaceMergingObjs[i].getIncidentType(ray);
       if (incidentType == 1) {
-        // From inside to outside
-        n1 *= surfaceMergingObjs[i].getRefIndexAt(incidentPoint, ray);
         surfaceMergingObjs[i].onRayExit(ray);
       } else if (incidentType == -1) {
-        // From outside to inside
-        n1 /= surfaceMergingObjs[i].getRefIndexAt(incidentPoint, ray);
         surfaceMergingObjs[i].onRayEnter(ray);
       } else if (incidentType == 0) {
         // Equivalent to not intersecting with the obj (e.g. two interfaces overlap)
-        //n1=n1;
       } else {
-        // Situation that may cause bugs (e.g. incident on an edge point)
-        // To prevent shooting the ray to a wrong direction, absorb the ray
         return {
           isAbsorbed: true,
           isUndefinedBehavior: true
@@ -194,8 +281,6 @@ class BaseGlass extends BaseSceneObj {
     var normal_len = Math.sqrt(normal.x * normal.x + normal.y * normal.y);
     var normal_x = normal.x / normal_len;
     var normal_y = normal.y / normal_len;
-
-    var ray_len = Math.sqrt((ray.p2.x - ray.p1.x) * (ray.p2.x - ray.p1.x) + (ray.p2.y - ray.p1.y) * (ray.p2.y - ray.p1.y));
 
     var ray_x = (ray.p2.x - ray.p1.x) / ray_len;
     var ray_y = (ray.p2.y - ray.p1.y) / ray_len;
@@ -284,6 +369,29 @@ class BaseGlass extends BaseSceneObj {
     }
   }
 
+  /**
+   * True if the point lies strictly inside this homogeneous glass (not on the boundary).
+   * @param {import('../geometry.js').Point} point
+   * @returns {boolean}
+   */
+  pointStrictlyInside(point) {
+    return false;
+  }
+
+  /**
+   * @param {import('../Scene.js').default} scene
+   * @param {import('../geometry.js').Point} point
+   * @returns {Array<BaseGlass>}
+   */
+  static collectHomogeneousGlassesContainingPoint(scene, point) {
+    const out = [];
+    for (const obj of scene.opticalObjs) {
+      if (obj instanceof BaseGlass && obj.pointStrictlyInside(point)) {
+        out.push(obj);
+      }
+    }
+    return out;
+  }
 
   /**
    * Get the refractive index at a point for a ray
@@ -292,11 +400,16 @@ class BaseGlass extends BaseSceneObj {
    * @returns {number} - The refractive index at the point.
    */
   getRefIndexAt(point, ray) {
-    if (this.scene.simulateColors) {
-      return this.refIndex + this.cauchyB / (ray.wavelength * ray.wavelength * 0.000001);   // Not yet accounting for negative refractive indices
-    } else {
-      return this.refIndex;
+    const lambda = (ray && Number.isFinite(ray.wavelength)) ? ray.wavelength : Simulator.GREEN_WAVELENGTH;
+    const useCauchy = !this.materialId && this.scene.simulateColors;
+    const n = nFromMaterialOrCauchy(this.scene, this.materialId, lambda, this.refIndex, this.cauchyB, useCauchy);
+    if (Number.isFinite(n)) {
+      return n;
     }
+    if (this.scene.simulateColors) {
+      return this.refIndex + this.cauchyB / (lambda * lambda * 0.000001);
+    }
+    return this.refIndex;
   }
 
 

@@ -18,6 +18,7 @@ import BaseGlass from '../BaseGlass.js';
 import CircleObjMixin from '../CircleObjMixin.js';
 import i18next from 'i18next';
 import geometry from '../../geometry.js';
+import Simulator from '../../Simulator.js';
 
 /**
  * Glass of the shape of a circle.
@@ -35,13 +36,13 @@ class CircleGlass extends CircleObjMixin(BaseGlass) {
   static type = 'CircleGlass';
   static isOptical = true;
   static mergesWithGlass = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseGlass.mergeGlassSerializable({
     p1: null,
     p2: null,
     refIndex: 1.5,
     cauchyB: 0.004,
     partialReflect: true
-  };
+  });
 
   static getDescription(objData, scene, detailed = false) {
     return i18next.t('main:meta.parentheses', { main: i18next.t('main:tools.categories.glass'), sub: i18next.t('main:tools.CircleGlass.title') });
@@ -109,6 +110,13 @@ class CircleGlass extends CircleObjMixin(BaseGlass) {
       return -1; // From outside to inside
     }
     return NaN;
+  }
+
+  pointStrictlyInside(point) {
+    const r2 = geometry.distanceSquared(this.p1, this.p2);
+    const d2 = geometry.distanceSquared(this.p1, point);
+    const eps = Simulator.MIN_RAY_SEGMENT_LENGTH_SQUARED * this.scene.lengthScale * this.scene.lengthScale;
+    return d2 < r2 - eps;
   }
 };
 
