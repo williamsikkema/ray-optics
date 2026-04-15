@@ -19,6 +19,14 @@ import LineObjMixin from '../LineObjMixin.js';
 import i18next from 'i18next';
 import Simulator from '../../Simulator.js';
 import geometry from '../../geometry.js';
+import {
+  MirrorSpectralMode,
+  migrateMirrorSpectralMode,
+  applyMirrorSpectralModeToFlags,
+  mirrorSpectralModePropertySchemaEntry,
+  populateMirrorSpectralObjBar,
+  mirrorTintedStrokeStyle
+} from './MirrorSpectralCommon.js';
 import { evaluateLatex } from '../../equation.js';
 import { equationValueForListDisplay } from '../../propertyUtils/equationConversion.js';
 import escapeHtml from 'escape-html';
@@ -44,15 +52,26 @@ class CustomMirror extends LineObjMixin(BaseFilter) {
   static type = 'CustomMirror';
   static isOptical = true;
   static mergesWithGlass = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseFilter.mergeFilterSerializable({
     p1: null,
     p2: null,
     eqn: "0.5\\cdot\\sqrt{1-x^2}",
+    mirrorSpectralMode: MirrorSpectralMode.NORMAL,
     filter: false,
     invert: false,
     wavelength: Simulator.GREEN_WAVELENGTH,
     bandwidth: 10
-  };
+  });
+
+  /**
+   * @param {import('../../Scene.js').default} scene
+   * @param {Object|null} jsonObj
+   */
+  constructor(scene, jsonObj) {
+    super(scene, jsonObj);
+    migrateMirrorSpectralMode(this, jsonObj);
+    applyMirrorSpectralModeToFlags(this);
+  }
 
   static getDescription(objData, scene, detailed = false) {
     const base = i18next.t('main:tools.categories.mirror');
@@ -67,6 +86,7 @@ class CustomMirror extends LineObjMixin(BaseFilter) {
   static getPropertySchema(objData, scene) {
     return [
       ...super.getPropertySchema(objData, scene),
+      mirrorSpectralModePropertySchemaEntry(),
       {
         key: 'eqn',
         type: 'equation',
@@ -85,7 +105,7 @@ class CustomMirror extends LineObjMixin(BaseFilter) {
       delete obj.tmp_points;
     }, '<ul><li>' + i18next.t('simulator:sceneObjs.common.eqnInfo.constants') + '<br><code>pi e</code></li><li>' + i18next.t('simulator:sceneObjs.common.eqnInfo.operators') + '<br><code>+ - * / ^</code></li><li>' + i18next.t('simulator:sceneObjs.common.eqnInfo.functions') + '<br><code>sqrt sin cos tan sec csc cot sinh cosh tanh log exp arcsin arccos arctan arcsinh arccosh arctanh floor round ceil trunc sgn max min abs</code></li><li>' + i18next.t('simulator:sceneObjs.common.eqnInfo.module') + '</li></ul>');
     
-    super.populateObjBar(objBar);
+    populateMirrorSpectralObjBar(objBar, this);
   }
 
   draw(canvasRenderer, isAboveLight, isHovered) {
@@ -110,8 +130,7 @@ class CustomMirror extends LineObjMixin(BaseFilter) {
     }
 
     // Draw the curve
-    const colorArray = this.scene.simulator.wavelengthToColor(this.wavelength || Simulator.GREEN_WAVELENGTH, 1);
-    ctx.strokeStyle = isHovered ? this.scene.highlightColorCss : canvasRenderer.rgbaToCssColor(this.scene.simulateColors && this.wavelength && this.filter ? colorArray : this.scene.theme.mirror.color);
+    ctx.strokeStyle = mirrorTintedStrokeStyle(this.scene, this, canvasRenderer, isHovered, this.scene.theme.mirror.color);
     ctx.lineWidth = this.scene.theme.mirror.width * ls;
     ctx.beginPath();
     
@@ -244,14 +263,18 @@ class CustomMirror extends LineObjMixin(BaseFilter) {
   }
 
   onRayIncident(ray, rayIndex, incidentPoint) {
-    var rx = ray.p1.x - incidentPoint.x;
-    var ry = ray.p1.y - incidentPoint.y;
     var i = this.tmp_i;
     var pts = this.tmp_points;
     var seg = geometry.line(pts[i], pts[i + 1]);
+    const spectral = this.trySpectralLineMirror(ray, incidentPoint, seg.p1, seg.p2);
+    if (spectral) {
+      return spectral;
+    }
+
+    var rx = ray.p1.x - incidentPoint.x;
+    var ry = ray.p1.y - incidentPoint.y;
     var mx = seg.p2.x - seg.p1.x;
     var my = seg.p2.y - seg.p1.y;
-
 
     ray.p1 = incidentPoint;
     var frac;

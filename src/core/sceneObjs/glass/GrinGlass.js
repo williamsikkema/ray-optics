@@ -15,6 +15,7 @@
  */
 
 import BaseGrinGlass from '../BaseGrinGlass.js';
+import BaseGlass from '../BaseGlass.js';
 import i18next from 'i18next';
 import Simulator from '../../Simulator.js';
 import geometry from '../../geometry.js';
@@ -37,7 +38,7 @@ class GrinGlass extends BaseGrinGlass {
   static type = 'GrinGlass';
   static isOptical = true;
   static mergesWithGlass = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseGlass.mergeGlassSerializable({
     path: [],
     notDone: false,
     refIndexFn: '1.1+0.1\\cdot\\cos\\left(0.1\\cdot y\\right)',
@@ -46,7 +47,7 @@ class GrinGlass extends BaseGrinGlass {
     stepSize: 1,
     intersectTol: 1e-3,
     partialReflect: true
-  };
+  });
   
   static getDescription(objData, scene, detailed = false) {
     return i18next.t('main:tools.GrinGlass.title');

@@ -54,20 +54,22 @@ describe('ParamMirror', () => {
 
   it('sets properties for non-filter mode', () => {
     user.click(100, 100);
-    expect(user.get("{{simulator:sceneObjs.BaseFilter.filter}}")).toBeNull();
+    user.setScene('simulateColors', false);
+    expect(user.get('{{simulator:sceneObjs.Mirror.spectralMode}}')).toBeNull();
   });
 
   it('sets properties for filter mode', () => {
     user.click(100, 100);
     user.setScene('simulateColors', true);
-    user.set("{{simulator:sceneObjs.BaseFilter.filter}}", true);
+    user.set('{{simulator:sceneObjs.Mirror.spectralMode}}', 'filter');
     user.set("{{simulator:sceneObjs.common.wavelength}}", 500);
     user.set("{{simulator:sceneObjs.BaseFilter.bandwidth}}", 20);
-    user.set("{{simulator:sceneObjs.BaseFilter.invert}}", true);
+    user.set('{{simulator:sceneObjs.Mirror.invert}}', true);
 
     const result = obj.serialize();
     expect(result.type).toBe('ParamMirror');
     expect(result.origin).toEqual({ x: 100, y: 100 });
+    expect(result.mirrorSpectralMode).toBe('filter');
     expect(result.filter).toBe(true);
     expect(result.wavelength).toBe(500);
     expect(result.bandwidth).toBe(20);

@@ -18,6 +18,14 @@ import BaseFilter from '../BaseFilter.js';
 import i18next from 'i18next';
 import Simulator from '../../Simulator.js';
 import geometry from '../../geometry.js';
+import {
+  MirrorSpectralMode,
+  migrateMirrorSpectralMode,
+  applyMirrorSpectralModeToFlags,
+  mirrorSpectralModePropertySchemaEntry,
+  populateMirrorSpectralObjBar,
+  mirrorTintedStrokeStyle
+} from './MirrorSpectralCommon.js';
 
 /**
  * Parabolic mirror.
@@ -42,15 +50,26 @@ class ParabolicMirror extends BaseFilter {
   static type = 'ParabolicMirror';
   static isOptical = true;
   static mergesWithGlass = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseFilter.mergeFilterSerializable({
     p1: null,
     p2: null,
     p3: null,
+    mirrorSpectralMode: MirrorSpectralMode.NORMAL,
     filter: false,
     invert: false,
     wavelength: Simulator.GREEN_WAVELENGTH,
     bandwidth: 10
-  };
+  });
+
+  /**
+   * @param {import('../../Scene.js').default} scene
+   * @param {Object|null} jsonObj
+   */
+  constructor(scene, jsonObj) {
+    super(scene, jsonObj);
+    migrateMirrorSpectralMode(this, jsonObj);
+    applyMirrorSpectralModeToFlags(this);
+  }
 
   static getDescription(objData, scene, detailed = false) {
     return i18next.t('main:meta.parentheses', { main: i18next.t('main:tools.categories.mirror'), sub: i18next.t('main:tools.ParabolicMirror.title') });
@@ -62,6 +81,7 @@ class ParabolicMirror extends BaseFilter {
       { key: 'p2', type: 'point', label: i18next.t('simulator:sceneObjs.LineObjMixin.endpoint2') },
       { key: 'p3', type: 'point', label: i18next.t('simulator:sceneObjs.ParabolicMirror.vertex') },
       ...super.getPropertySchema(objData, scene),
+      mirrorSpectralModePropertySchemaEntry()
     ];
   }
 
@@ -113,7 +133,7 @@ class ParabolicMirror extends BaseFilter {
       }
     }
 
-    super.populateObjBar(objBar);
+    populateMirrorSpectralObjBar(objBar, this);
   }
 
   draw(canvasRenderer, isAboveLight, isHovered) {
@@ -135,8 +155,7 @@ class ParabolicMirror extends BaseFilter {
       var x0 = p12d / 2;
       var a = height / (x0 * x0); // y=ax^2
       var i;
-      const colorArray = this.scene.simulator.wavelengthToColor(this.wavelength || Simulator.GREEN_WAVELENGTH, 1);
-      ctx.strokeStyle = isHovered ? this.scene.highlightColorCss : canvasRenderer.rgbaToCssColor(this.scene.simulateColors && this.wavelength && this.filter ? colorArray : this.scene.theme.mirror.color);
+      ctx.strokeStyle = mirrorTintedStrokeStyle(this.scene, this, canvasRenderer, isHovered, this.scene.theme.mirror.color);
       ctx.lineWidth = this.scene.theme.mirror.width * ls;
       ctx.beginPath();
       this.tmp_points = [geometry.point(this.p1.x, this.p1.y)];
@@ -554,6 +573,10 @@ class ParabolicMirror extends BaseFilter {
   onRayIncident(ray, rayIndex, incidentPoint) {
     // Handle degenerate case (linear mirror)
     if (this.isDegenerate()) {
+      const spectral = this.trySpectralLineMirror(ray, incidentPoint, this.p1, this.p2);
+      if (spectral) {
+        return spectral;
+      }
       const dir = [(this.p2.x - this.p1.x), (this.p2.y - this.p1.y)];
       const len = Math.sqrt(dir[0] * dir[0] + dir[1] * dir[1]);
       const nx = -dir[1] / len;  // Normal vector
@@ -579,40 +602,46 @@ class ParabolicMirror extends BaseFilter {
       return;
     }
 
-    // Normal parabolic case
-    // Transform to local coordinates
-    const incidentLocal = this.transformToLocal(incidentPoint);
-    const rayStartLocal = this.transformToLocal(ray.p1);
+    const applyParabolicReflection = (r) => {
+      // Normal parabolic case — transform to local coordinates
+      const incidentLocal = this.transformToLocal(incidentPoint);
+      const rayStartLocal = this.transformToLocal(r.p1);
 
-    // Get incident direction
-    const dx = incidentLocal.x - rayStartLocal.x;
-    const dy = incidentLocal.y - rayStartLocal.y;
-    const d = Math.sqrt(dx * dx + dy * dy);
-    const vx = dx / d;
-    const vy = dy / d;
+      // Get incident direction
+      const dx = incidentLocal.x - rayStartLocal.x;
+      const dy = incidentLocal.y - rayStartLocal.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      const vx = dx / d;
+      const vy = dy / d;
 
-    // Get parabola coefficient
-    const a = this.getParabolaCoefficient();
+      // Get parabola coefficient
+      const a = this.getParabolaCoefficient();
 
-    // Calculate normal vector at intersection point (-2ax, 1)
-    const nx = -2 * a * incidentLocal.x;
-    const ny = 1;
-    const nlen = Math.sqrt(nx * nx + ny * ny);
-    const nnx = nx / nlen;
-    const nny = ny / nlen;
+      // Calculate normal vector at intersection point (-2ax, 1)
+      const nx = -2 * a * incidentLocal.x;
+      const ny = 1;
+      const nlen = Math.sqrt(nx * nx + ny * ny);
+      const nnx = nx / nlen;
+      const nny = ny / nlen;
 
-    // Calculate reflection direction: r = v - 2(v·n)n
-    const dot = vx * nnx + vy * nny;
-    const rx = vx - 2 * dot * nnx;
-    const ry = vy - 2 * dot * nny;
+      // Calculate reflection direction: r = v - 2(v·n)n
+      const dot = vx * nnx + vy * nny;
+      const rx = vx - 2 * dot * nnx;
+      const ry = vy - 2 * dot * nny;
 
-    // Set new ray endpoint in global coordinates
-    ray.p1 = incidentPoint;
-    const reflectedPoint = this.transformToGlobal({
-      x: incidentLocal.x + rx,
-      y: incidentLocal.y + ry
-    });
-    ray.p2 = reflectedPoint;
+      // Set new ray endpoint in global coordinates
+      r.p1 = incidentPoint;
+      const reflectedPoint = this.transformToGlobal({
+        x: incidentLocal.x + rx,
+        y: incidentLocal.y + ry
+      });
+      r.p2 = reflectedPoint;
+    };
+    const spectral = this.trySpectralReflectanceSplit(ray, incidentPoint, applyParabolicReflection);
+    if (spectral) {
+      return spectral;
+    }
+    applyParabolicReflection(ray);
   }
 
 };

@@ -20,6 +20,8 @@ import Simulator from '../../Simulator.js';
 import geometry from '../../geometry.js';
 import i18next from 'i18next';
 import { exp } from 'mathjs';
+import { getSpectralBandsForSource } from '../../spectralSourceHelper.js';
+import { populateSpectralSourceSpectrumUi } from '../../spectralSourceObjBar.js';
 
 /**
  * A parallel or divergent beam of light.
@@ -47,7 +49,16 @@ class Beam extends LineObjMixin(BaseSceneObj) {
     wavelength: Simulator.GREEN_WAVELENGTH,
     emisAngle: 0.0,
     lambert: false,
-    random: false
+    random: false,
+    spectralMode: 'mono',
+    spectralWavelengths: [],
+    spectralPower: [],
+    blackbodyTempK: 5500,
+    blackbodyPreset: 'custom',
+    ledPeakNm: 550,
+    ledFwhmNm: 30,
+    fluorescentPreset: 'cool_white',
+    sodiumPreset: 'lps'
   };
 
   static getDescription(objData, scene, detailed = false) {
@@ -76,9 +87,7 @@ class Beam extends LineObjMixin(BaseSceneObj) {
       obj.brightness = value;
     }, brightnessInfo);
     if (this.scene.simulateColors) {
-      objBar.createNumber(i18next.t('simulator:sceneObjs.common.wavelength') + ' (nm)', Simulator.UV_WAVELENGTH, Simulator.INFRARED_WAVELENGTH, 1, this.wavelength, function (obj, value) {
-        obj.wavelength = value;
-      });
+      populateSpectralSourceSpectrumUi(objBar, this);
     }
 
     if (objBar.showAdvanced(!this.arePropertiesDefault(['emisAngle', 'lambert', 'random']))) {
@@ -169,28 +178,38 @@ class Beam extends LineObjMixin(BaseSceneObj) {
     this.initRandom();
 
     let newRays = [];
+    const bands = getSpectralBandsForSource(this.scene, this);
 
     if (!this.random) {
+      let firstRay = true;
       for (var i = 0.5; i <= n; i++) {
         var x = this.p1.x + i * stepX;
         var y = this.p1.y + i * stepY;
-        newRays.push(this.newRay(x, y, normal, 0.0, i == 0, rayBrightness, rayDensity));
-        for (var angle = s; angle < halfAngle; angle += s) {
-          newRays.push(this.newRay(x, y, normal, angle, i == 0, rayBrightness, rayDensity));
-          newRays.push(this.newRay(x, y, normal, -angle, i == 0, rayBrightness, rayDensity));
+        for (let bi = 0; bi < bands.length; bi++) {
+          const band = bands[bi];
+          const isGap = firstRay && bi === 0;
+          newRays.push(this.newRay(x, y, normal, 0.0, isGap, rayBrightness, rayDensity, band));
+          firstRay = false;
+          for (var angle = s; angle < halfAngle; angle += s) {
+            newRays.push(this.newRay(x, y, normal, angle, false, rayBrightness, rayDensity, band));
+            newRays.push(this.newRay(x, y, normal, -angle, false, rayBrightness, rayDensity, band));
+          }
         }
       }
     } else {
       for (var i = 0; i < n * numnAngledRays; i++) {
         const position = this.getRandom(i * 2);
         const angle = this.getRandom(i * 2 + 1);
-        newRays.push(this.newRay(
-          this.p1.x + position * sizeX,
-          this.p1.y + position * sizeY,
-          normal,
-          (angle * 2 - 1) * halfAngle,
-          i == 0,
-          rayBrightness, rayDensity));
+        for (let bi = 0; bi < bands.length; bi++) {
+          const band = bands[bi];
+          newRays.push(this.newRay(
+            this.p1.x + position * sizeX,
+            this.p1.y + position * sizeY,
+            normal,
+            (angle * 2 - 1) * halfAngle,
+            i == 0 && bi === 0,
+            rayBrightness, rayDensity, band));
+        }
       }
     }
 
@@ -220,10 +239,11 @@ class Beam extends LineObjMixin(BaseSceneObj) {
     return this.randomNumbers[i];
   }
 
-  newRay(x, y, normal, angle, gap, brightness_factor = 1.0, rayDensity = this.scene.rayDensity) {
+  newRay(x, y, normal, angle, gap, brightness_factor = 1.0, rayDensity = this.scene.rayDensity, band = null) {
     var ray1 = geometry.line(geometry.point(x, y), geometry.point(x + Math.sin(normal + angle), y + Math.cos(normal + angle)));
-    ray1.brightness_s = Math.min(this.brightness * this.scene.lengthScale / rayDensity * brightness_factor, 1) * 0.5;
-    ray1.brightness_p = Math.min(this.brightness * this.scene.lengthScale / rayDensity * brightness_factor, 1) * 0.5;
+    const w = band && this.scene.simulateColors ? band.weight : 1;
+    ray1.brightness_s = Math.min(this.brightness * this.scene.lengthScale / rayDensity * brightness_factor, 1) * 0.5 * w;
+    ray1.brightness_p = Math.min(this.brightness * this.scene.lengthScale / rayDensity * brightness_factor, 1) * 0.5 * w;
     if (this.lambert) {
       const lambert = Math.cos(angle)
       ray1.brightness_s *= lambert;
@@ -231,7 +251,7 @@ class Beam extends LineObjMixin(BaseSceneObj) {
     }
     ray1.isNew = true;
     if (this.scene.simulateColors) {
-      ray1.wavelength = this.wavelength;
+      ray1.wavelength = band ? band.wavelength : this.wavelength;
     }
     ray1.gap = gap;
 

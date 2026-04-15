@@ -28,6 +28,7 @@
   <ColorModeModal />
   <ThemeModal />
   <LanguageModal />
+  <SpectralPlotModal />
 
   <input type="file" id="openfile" style="display:none">
 </template>
@@ -50,6 +51,7 @@ import SaveModal from './SaveModal.vue';
 import ColorModeModal from './ColorModeModal.vue';
 import ThemeModal from './ThemeModal.vue';
 import LanguageModal from './LanguageModal.vue';
+import SpectralPlotModal from './SpectralPlotModal.vue';
 
 
 export default {
@@ -66,7 +68,8 @@ export default {
     SaveModal,
     ColorModeModal,
     ThemeModal,
-    LanguageModal
+    LanguageModal,
+    SpectralPlotModal
   }
 }
 </script>

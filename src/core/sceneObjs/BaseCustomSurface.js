@@ -19,6 +19,7 @@ import i18next from 'i18next';
 import geometry from '../geometry.js';
 import { evaluateLatex } from '../equation.js';
 import Simulator from '../Simulator.js';
+import { combinedRefIndex } from '../surfaceMerge.js';
 
 /**
  * @typedef {Object} OutRay
@@ -159,14 +160,14 @@ class BaseCustomSurface extends BaseSceneObj {
       }
     }
 
-    // Determine the refractive indices of the source and destination glasses
+    // Determine the refractive indices of the source and destination glasses (one representative per side).
     let n0 = 1;
     let n1 = 1;
-    for (const obj of sourceGlasses) {
-      n0 *= obj.getRefIndexAt(incidentPoint, ray);
+    if (sourceGlasses.length) {
+      n0 = combinedRefIndex(sourceGlasses, incidentPoint, ray, this.scene);
     }
-    for (const obj of destinationGlasses) {
-      n1 *= obj.getRefIndexAt(incidentPoint, ray);
+    if (destinationGlasses.length) {
+      n1 = combinedRefIndex(destinationGlasses, incidentPoint, ray, this.scene);
     }
 
     const normalAngle = Math.atan2(normal.y, normal.x);

@@ -37,14 +37,14 @@ class Blocker extends LineObjMixin(BaseFilter) {
   static type = 'Blocker';
   static isOptical = true;
   static mergesWithGlass = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseFilter.mergeFilterSerializable({
     p1: null,
     p2: null,
     filter: false,
     invert: false,
     wavelength: Simulator.GREEN_WAVELENGTH,
     bandwidth: 10
-  };
+  });
 
   static getDescription(objData, scene, detailed = false) {
     return i18next.t('main:tools.Blocker.title');
@@ -59,6 +59,14 @@ class Blocker extends LineObjMixin(BaseFilter) {
   populateObjBar(objBar) {
     objBar.setTitle(i18next.t('main:tools.Blocker.title'));
     super.populateObjBar(objBar);
+    if (this.scene.simulateColors && this.filter) {
+      objBar.createBoolean('Spectral extinction k(λ)', this.spectralExtinction, function (obj, value) {
+        obj.spectralExtinction = value;
+      }, '<p>When enabled, use extinctionWavelengths (nm) and extinctionK arrays in JSON. Beer–Lambert with filterThicknessMm.</p>');
+      objBar.createNumber('Filter thickness (mm)', 0.001, 100, 0.1, this.filterThicknessMm, function (obj, value) {
+        obj.filterThicknessMm = value;
+      });
+    }
   }
 
   draw(canvasRenderer, isAboveLight, isHovered) {
@@ -91,6 +99,9 @@ class Blocker extends LineObjMixin(BaseFilter) {
   }
 
   onRayIncident(ray, rayIndex, incidentPoint) {
+    if (this.trySpectralExtinctionPass(ray, incidentPoint)) {
+      return;
+    }
     return {
       isAbsorbed: true
     };

@@ -15,6 +15,7 @@
  */
 
 import BaseGrinGlass from '../BaseGrinGlass.js';
+import BaseGlass from '../BaseGlass.js';
 import CircleObjMixin from '../CircleObjMixin.js';
 import i18next from 'i18next';
 import geometry from '../../geometry.js';
@@ -37,7 +38,7 @@ class CircleGrinGlass extends CircleObjMixin(BaseGrinGlass) {
   static type = 'CircleGrinGlass';
   static isOptical = true;
   static mergesWithGlass = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseGlass.mergeGlassSerializable({
     p1: null,
     p2: null,
     refIndexFn: '1+e^{-\\frac{x^2+y^2}{50^2}}',
@@ -46,7 +47,7 @@ class CircleGrinGlass extends CircleObjMixin(BaseGrinGlass) {
     stepSize: 1,
     intersectTol: 1e-3,
     partialReflect: true
-  };
+  });
 
   static getDescription(objData, scene, detailed = false) {
     return i18next.t('main:tools.CircleGrinGlass.title');

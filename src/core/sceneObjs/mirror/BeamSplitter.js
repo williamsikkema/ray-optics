@@ -19,6 +19,14 @@ import LineObjMixin from '../LineObjMixin.js';
 import i18next from 'i18next';
 import Simulator from '../../Simulator.js';
 import geometry from '../../geometry.js';
+import {
+  MirrorSpectralMode,
+  migrateMirrorSpectralMode,
+  applyMirrorSpectralModeToFlags,
+  mirrorSpectralModePropertySchemaEntry,
+  populateMirrorSpectralObjBar,
+  mirrorTintedStrokeStyle
+} from './MirrorSpectralCommon.js';
 
 /**
  * Beam splitter.
@@ -38,15 +46,26 @@ import geometry from '../../geometry.js';
 class BeamSplitter extends LineObjMixin(BaseFilter) {
   static type = 'BeamSplitter';
   static isOptical = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseFilter.mergeFilterSerializable({
     p1: null,
     p2: null,
     transRatio: 0.5,
+    mirrorSpectralMode: MirrorSpectralMode.NORMAL,
     filter: false,
     invert: false,
     wavelength: Simulator.GREEN_WAVELENGTH,
     bandwidth: 10
-  };
+  });
+
+  /**
+   * @param {import('../../Scene.js').default} scene
+   * @param {Object|null} jsonObj
+   */
+  constructor(scene, jsonObj) {
+    super(scene, jsonObj);
+    migrateMirrorSpectralMode(this, jsonObj);
+    applyMirrorSpectralModeToFlags(this);
+  }
 
   static getDescription(objData, scene, detailed = false) {
     return i18next.t('main:tools.BeamSplitter.title');
@@ -55,6 +74,7 @@ class BeamSplitter extends LineObjMixin(BaseFilter) {
   static getPropertySchema(objData, scene) {
     return [
       ...super.getPropertySchema(objData, scene),
+      mirrorSpectralModePropertySchemaEntry(),
       { key: 'transRatio', type: 'number', label: i18next.t('simulator:sceneObjs.BeamSplitter.transRatio') },
     ];
   }
@@ -65,7 +85,7 @@ class BeamSplitter extends LineObjMixin(BaseFilter) {
       obj.transRatio = value;
     });
 
-    super.populateObjBar(objBar);
+    populateMirrorSpectralObjBar(objBar, this);
   }
 
   draw(canvasRenderer, isAboveLight, isHovered) {
@@ -78,14 +98,14 @@ class BeamSplitter extends LineObjMixin(BaseFilter) {
       return;
     }
     
-    ctx.strokeStyle = isHovered ? this.scene.highlightColorCss : canvasRenderer.rgbaToCssColor(this.scene.theme.beamSplitter.color);
+    ctx.strokeStyle = mirrorTintedStrokeStyle(this.scene, this, canvasRenderer, isHovered, this.scene.theme.beamSplitter.color);
     ctx.lineWidth = this.scene.theme.beamSplitter.width * ls;
     ctx.beginPath();
     ctx.moveTo(this.p1.x, this.p1.y);
     ctx.lineTo(this.p2.x, this.p2.y);
     ctx.stroke();
 
-    if (this.scene.simulateColors && this.wavelength && this.filter) {
+    if (this.scene.simulateColors && this.wavelength && this.filter && this.mirrorSpectralMode === MirrorSpectralMode.FILTER) {
       const colorArray = this.scene.simulator.wavelengthToColor(this.wavelength || Simulator.GREEN_WAVELENGTH, 1);
       ctx.strokeStyle = isHovered ? this.scene.highlightColorCss : canvasRenderer.rgbaToCssColor(colorArray);
       ctx.setLineDash([15 * ls, 15 * ls]);
@@ -106,6 +126,11 @@ class BeamSplitter extends LineObjMixin(BaseFilter) {
   }
 
   onRayIncident(ray, rayIndex, incidentPoint) {
+    const spectral = this.trySpectralLineMirror(ray, incidentPoint, this.p1, this.p2);
+    if (spectral) {
+      return spectral;
+    }
+
     var rx = ray.p1.x - incidentPoint.x;
     var ry = ray.p1.y - incidentPoint.y;
 

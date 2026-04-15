@@ -19,6 +19,8 @@ import LineObjMixin from '../LineObjMixin.js';
 import Simulator from '../../Simulator.js';
 import geometry from '../../geometry.js';
 import i18next from 'i18next';
+import { getSpectralBandsForSource } from '../../spectralSourceHelper.js';
+import { populateSpectralSourceSpectrumUi } from '../../spectralSourceObjBar.js';
 
 /**
  * A single ray of light.
@@ -39,7 +41,16 @@ class SingleRay extends LineObjMixin(BaseSceneObj) {
     p1: null,
     p2: null,
     brightness: 1,
-    wavelength: Simulator.GREEN_WAVELENGTH
+    wavelength: Simulator.GREEN_WAVELENGTH,
+    spectralMode: 'mono',
+    spectralWavelengths: [],
+    spectralPower: [],
+    blackbodyTempK: 5500,
+    blackbodyPreset: 'custom',
+    ledPeakNm: 550,
+    ledFwhmNm: 30,
+    fluorescentPreset: 'cool_white',
+    sodiumPreset: 'lps'
   };
 
   static getDescription(objData, scene, detailed = false) {
@@ -61,9 +72,7 @@ class SingleRay extends LineObjMixin(BaseSceneObj) {
       obj.brightness = value;
     });
     if (this.scene.simulateColors) {
-      objBar.createNumber(i18next.t('simulator:sceneObjs.common.wavelength') + ' (nm)', Simulator.UV_WAVELENGTH, Simulator.INFRARED_WAVELENGTH, 1, this.wavelength, function (obj, value) {
-        obj.wavelength = value;
-      });
+      populateSpectralSourceSpectrumUi(objBar, this);
     }
   }
 
@@ -92,16 +101,23 @@ class SingleRay extends LineObjMixin(BaseSceneObj) {
   }
 
   onSimulationStart() {
-    var ray1 = geometry.line(this.p1, this.p2);
-    ray1.brightness_s = 0.5 * this.brightness;
-    ray1.brightness_p = 0.5 * this.brightness;
-    if (this.scene.simulateColors) {
-      ray1.wavelength = this.wavelength;
+    const bands = getSpectralBandsForSource(this.scene, this);
+    const newRays = [];
+    for (let b = 0; b < bands.length; b++) {
+      const band = bands[b];
+      var ray1 = geometry.line(this.p1, this.p2);
+      const w = band.weight;
+      ray1.brightness_s = 0.5 * this.brightness * w;
+      ray1.brightness_p = 0.5 * this.brightness * w;
+      if (this.scene.simulateColors) {
+        ray1.wavelength = band.wavelength;
+      }
+      ray1.gap = b === 0;
+      ray1.isNew = true;
+      newRays.push(ray1);
     }
-    ray1.gap = true;
-    ray1.isNew = true;
     return {
-      newRays: [ray1]
+      newRays: newRays
     };
   }
 };

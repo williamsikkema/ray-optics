@@ -61,6 +61,7 @@ describe('CircleBlocker', () => {
   it('sets properties for non-filter mode', () => {
     user.click(100, 100);
     user.click(200, 300);
+    user.setScene('simulateColors', false);
     expect(user.get("{{simulator:sceneObjs.BaseFilter.filter}}")).toBeNull();
   });
 

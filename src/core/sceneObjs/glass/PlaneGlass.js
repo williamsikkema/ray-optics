@@ -35,13 +35,13 @@ class PlaneGlass extends LineObjMixin(BaseGlass) {
   static type = 'PlaneGlass';
   static isOptical = true;
   static mergesWithGlass = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseGlass.mergeGlassSerializable({
     p1: null,
     p2: null,
     refIndex: 1.5,
     cauchyB: 0.004,
     partialReflect: true
-  };
+  });
 
   static getDescription(objData, scene, detailed = false) {
     return i18next.t('main:meta.parentheses', { main: i18next.t('main:tools.categories.glass'), sub: i18next.t('main:tools.PlaneGlass.title') });

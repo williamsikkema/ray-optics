@@ -15,6 +15,7 @@
  */
 
 import BaseGrinGlass from '../BaseGrinGlass.js';
+import BaseGlass from '../BaseGlass.js';
 import i18next from 'i18next';
 import Simulator from '../../Simulator.js';
 import geometry from '../../geometry.js';
@@ -41,7 +42,7 @@ class CurveGrinGlass extends BaseGrinGlass {
   static type = 'CurveGrinGlass';
   static isOptical = true;
   static mergesWithGlass = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseGlass.mergeGlassSerializable({
     points: [],
     notDone: false,
     refIndexFn: '1.1+0.1\\cdot\\cos\\left(0.1\\cdot y\\right)',
@@ -50,7 +51,7 @@ class CurveGrinGlass extends BaseGrinGlass {
     stepSize: 1,
     intersectTol: 5e-2,
     partialReflect: true
-  }
+  });
   
   /**
    * @param {Scene} scene - The scene the object belongs to.

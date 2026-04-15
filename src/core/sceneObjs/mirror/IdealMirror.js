@@ -19,6 +19,14 @@ import LineObjMixin from '../LineObjMixin.js';
 import i18next from 'i18next';
 import Simulator from '../../Simulator.js';
 import geometry from '../../geometry.js';
+import {
+  MirrorSpectralMode,
+  migrateMirrorSpectralMode,
+  applyMirrorSpectralModeToFlags,
+  mirrorSpectralModePropertySchemaEntry,
+  populateMirrorSpectralObjBar,
+  mirrorTintedStrokeStyle
+} from './MirrorSpectralCommon.js';
 
 /**
  * Ideal curved mirror that follows the mirror equation exactly.
@@ -35,15 +43,26 @@ class IdealMirror extends LineObjMixin(BaseFilter) {
   static type = 'IdealMirror';
   static isOptical = true;
   static mergesWithGlass = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseFilter.mergeFilterSerializable({
     p1: null,
     p2: null,
     focalLength: 100,
+    mirrorSpectralMode: MirrorSpectralMode.NORMAL,
     filter: false,
     invert: false,
     wavelength: Simulator.GREEN_WAVELENGTH,
     bandwidth: 10
-  };
+  });
+
+  /**
+   * @param {import('../../Scene.js').default} scene
+   * @param {Object|null} jsonObj
+   */
+  constructor(scene, jsonObj) {
+    super(scene, jsonObj);
+    migrateMirrorSpectralMode(this, jsonObj);
+    applyMirrorSpectralModeToFlags(this);
+  }
 
   static getDescription(objData, scene, detailed = false) {
     return i18next.t('main:tools.IdealMirror.title');
@@ -52,6 +71,7 @@ class IdealMirror extends LineObjMixin(BaseFilter) {
   static getPropertySchema(objData, scene) {
     return [
       ...super.getPropertySchema(objData, scene),
+      mirrorSpectralModePropertySchemaEntry(),
       { key: 'focalLength', type: 'number', label: i18next.t('simulator:sceneObjs.common.focalLength') },
     ];
   }
@@ -71,7 +91,7 @@ class IdealMirror extends LineObjMixin(BaseFilter) {
       }, null, true);
     }
 
-    super.populateObjBar(objBar);
+    populateMirrorSpectralObjBar(objBar, this);
   }
 
   draw(canvasRenderer, isAboveLight, isHovered) {
@@ -95,8 +115,7 @@ class IdealMirror extends LineObjMixin(BaseFilter) {
     var center_size = Math.max(1, this.scene.theme.mirror.width / 2) * ls;
 
     // Draw the line segment
-    const colorArray = this.scene.simulator.wavelengthToColor(this.wavelength || Simulator.GREEN_WAVELENGTH, 1);
-    ctx.strokeStyle = isHovered ? this.scene.highlightColorCss : canvasRenderer.rgbaToCssColor(this.scene.simulateColors && this.wavelength && this.filter ? colorArray : this.scene.theme.mirror.color);
+    ctx.strokeStyle = mirrorTintedStrokeStyle(this.scene, this, canvasRenderer, isHovered, this.scene.theme.mirror.color);
     ctx.lineWidth = this.scene.theme.mirror.width * ls;
     ctx.globalAlpha = 1;
     ctx.beginPath();
@@ -167,45 +186,53 @@ class IdealMirror extends LineObjMixin(BaseFilter) {
   }
 
   onRayIncident(ray, rayIndex, incidentPoint) {
-    var mirror_length = geometry.segmentLength(this);
-    var main_line_unitvector_x = (-this.p1.y + this.p2.y) / mirror_length;
-    var main_line_unitvector_y = (this.p1.x - this.p2.x) / mirror_length;
-    var mid_point = geometry.segmentMidpoint(this);
+    const applyIdealReflection = (r) => {
+      var mirror_length = geometry.segmentLength(this);
+      var main_line_unitvector_x = (-this.p1.y + this.p2.y) / mirror_length;
+      var main_line_unitvector_y = (this.p1.x - this.p2.x) / mirror_length;
+      var mid_point = geometry.segmentMidpoint(this);
 
-    var twoF_point_1 = geometry.point(mid_point.x + main_line_unitvector_x * 2 * this.focalLength, mid_point.y + main_line_unitvector_y * 2 * this.focalLength);  // The first point at two focal lengths
-    var twoF_point_2 = geometry.point(mid_point.x - main_line_unitvector_x * 2 * this.focalLength, mid_point.y - main_line_unitvector_y * 2 * this.focalLength);  // The second point at two focal lengths
+      var twoF_point_1 = geometry.point(mid_point.x + main_line_unitvector_x * 2 * this.focalLength, mid_point.y + main_line_unitvector_y * 2 * this.focalLength);  // The first point at two focal lengths
+      var twoF_point_2 = geometry.point(mid_point.x - main_line_unitvector_x * 2 * this.focalLength, mid_point.y - main_line_unitvector_y * 2 * this.focalLength);  // The second point at two focal lengths
 
-    var twoF_line_near, twoF_line_far;
-    if (geometry.distanceSquared(ray.p1, twoF_point_1) < geometry.distanceSquared(ray.p1, twoF_point_2)) {
-      // The first point at two focal lengths is on the same side as the ray
-      twoF_line_near = geometry.parallelLineThroughPoint(this, twoF_point_1);
-      twoF_line_far = geometry.parallelLineThroughPoint(this, twoF_point_2);
-    } else {
-      // The second point at two focal lengths is on the same side as the ray
-      twoF_line_near = geometry.parallelLineThroughPoint(this, twoF_point_2);
-      twoF_line_far = geometry.parallelLineThroughPoint(this, twoF_point_1);
+      var twoF_line_near, twoF_line_far;
+      if (geometry.distanceSquared(r.p1, twoF_point_1) < geometry.distanceSquared(r.p1, twoF_point_2)) {
+        // The first point at two focal lengths is on the same side as the ray
+        twoF_line_near = geometry.parallelLineThroughPoint(this, twoF_point_1);
+        twoF_line_far = geometry.parallelLineThroughPoint(this, twoF_point_2);
+      } else {
+        // The second point at two focal lengths is on the same side as the ray
+        twoF_line_near = geometry.parallelLineThroughPoint(this, twoF_point_2);
+        twoF_line_far = geometry.parallelLineThroughPoint(this, twoF_point_1);
+      }
+
+      if (this.focalLength > 0) {
+        r.p2 = geometry.linesIntersection(twoF_line_far, geometry.line(mid_point, geometry.linesIntersection(twoF_line_near, r)));
+        r.p1 = geometry.point(incidentPoint.x, incidentPoint.y);
+      } else {
+        r.p2 = geometry.linesIntersection(twoF_line_far, geometry.line(incidentPoint, geometry.linesIntersection(twoF_line_near, geometry.line(mid_point, geometry.linesIntersection(twoF_line_far, r)))));
+        r.p1 = geometry.point(incidentPoint.x, incidentPoint.y);
+      }
+
+      // The above calculation is for an ideal lens, now mirror it.
+
+      r.p1.x = 2 * r.p1.x - r.p2.x;
+      r.p1.y = 2 * r.p1.y - r.p2.y;
+
+      var rx = r.p1.x - incidentPoint.x;
+      var ry = r.p1.y - incidentPoint.y;
+      var mx = this.p2.x - this.p1.x;
+      var my = this.p2.y - this.p1.y;
+
+      r.p1 = incidentPoint;
+      r.p2 = geometry.point(incidentPoint.x + rx * (my * my - mx * mx) - 2 * ry * mx * my, incidentPoint.y + ry * (mx * mx - my * my) - 2 * rx * mx * my);
+    };
+
+    const spectral = this.trySpectralReflectanceSplit(ray, incidentPoint, applyIdealReflection);
+    if (spectral) {
+      return spectral;
     }
-
-    if (this.focalLength > 0) {
-      ray.p2 = geometry.linesIntersection(twoF_line_far, geometry.line(mid_point, geometry.linesIntersection(twoF_line_near, ray)));
-      ray.p1 = geometry.point(incidentPoint.x, incidentPoint.y);
-    } else {
-      ray.p2 = geometry.linesIntersection(twoF_line_far, geometry.line(incidentPoint, geometry.linesIntersection(twoF_line_near, geometry.line(mid_point, geometry.linesIntersection(twoF_line_far, ray)))));
-      ray.p1 = geometry.point(incidentPoint.x, incidentPoint.y);
-    }
-
-    // The above calculation is for an ideal lens, now mirror it.
-    
-    ray.p1.x = 2 * ray.p1.x - ray.p2.x;
-    ray.p1.y = 2 * ray.p1.y - ray.p2.y;
-
-    var rx = ray.p1.x - incidentPoint.x;
-    var ry = ray.p1.y - incidentPoint.y;
-    var mx = this.p2.x - this.p1.x;
-    var my = this.p2.y - this.p1.y;
-
-    ray.p1 = incidentPoint;
-    ray.p2 = geometry.point(incidentPoint.x + rx * (my * my - mx * mx) - 2 * ry * mx * my, incidentPoint.y + ry * (mx * mx - my * my) - 2 * rx * mx * my);
+    applyIdealReflection(ray);
   }
 };
 

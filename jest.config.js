@@ -20,6 +20,7 @@ module.exports = {
   testMatch: [
     "**/test/propertyUtils/**/*.test.js",
     "**/test/sceneObjs/**/*.test.js",
+    "**/test/core/**/*.test.js",
     "**/test/scenes/**/*.test.js"
   ]
 };

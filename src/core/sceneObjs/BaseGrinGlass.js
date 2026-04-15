@@ -56,7 +56,10 @@ class BaseGrinGlass extends BaseGlass {
 
     const intersectTolInfo = '<p>' + i18next.t(`simulator:sceneObjs.${objData.type}.epsInfo.units`) + '</p><p>' + i18next.t(`simulator:sceneObjs.${objData.type}.epsInfo.functions`) + '</p>';
 
+    const stackFields = BaseGlass.getPropertySchema(objData, scene).filter((p) => p.key === 'stackPriority');
+
     return [
+      ...stackFields,
       { key: 'refIndexFn', type: 'equation', label: 'n(x,y)',
         variables: ['x', 'y', 'lambda'], differentiable: true,
         info: refIndexFnInfo },
@@ -124,6 +127,10 @@ class BaseGrinGlass extends BaseGlass {
         obj.partialReflect = value;
       });
     }
+
+    objBar.createNumber('Stack priority', -1000, 1000, 1, this.stackPriority, function (obj, value) {
+      obj.stackPriority = value;
+    }, '<p>Higher wins when multiple glasses share the same boundary. GRIN uses n(x,y) from the equation; stacking only affects merged interfaces.</p>');
 
   }
 

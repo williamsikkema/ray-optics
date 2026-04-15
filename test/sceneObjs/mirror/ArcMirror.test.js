@@ -140,7 +140,8 @@ describe('ArcMirror', () => {
     user.click(100, 100);
     user.click(200, 100);
     user.click(150, 150);
-    expect(user.get("{{simulator:sceneObjs.BaseFilter.filter}}")).toBeNull();
+    user.setScene('simulateColors', false);
+    expect(user.get('{{simulator:sceneObjs.Mirror.spectralMode}}')).toBeNull();
   });
 
   it('sets properties for filter mode', () => {
@@ -148,16 +149,17 @@ describe('ArcMirror', () => {
     user.click(200, 100);
     user.click(150, 150);
     user.setScene('simulateColors', true);
-    user.set("{{simulator:sceneObjs.BaseFilter.filter}}", true);
+    user.set('{{simulator:sceneObjs.Mirror.spectralMode}}', 'filter');
     user.set("{{simulator:sceneObjs.common.wavelength}}", 500);
     user.set("{{simulator:sceneObjs.BaseFilter.bandwidth}}", 20);
-    user.set("{{simulator:sceneObjs.BaseFilter.invert}}", true);
+    user.set('{{simulator:sceneObjs.Mirror.invert}}', true);
 
     expect(obj.serialize()).toEqual({
       type: "ArcMirror",
       p1: { x: 100, y: 100 },
       p2: { x: 200, y: 100 },
       p3: { x: 150, y: 150 },
+      mirrorSpectralMode: 'filter',
       filter: true,
       wavelength: 500,
       bandwidth: 20,

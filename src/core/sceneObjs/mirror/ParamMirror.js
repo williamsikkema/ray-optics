@@ -19,6 +19,14 @@ import ParamCurveObjMixin from '../ParamCurveObjMixin.js';
 import i18next from 'i18next';
 import Simulator from '../../Simulator.js';
 import geometry from '../../geometry.js';
+import {
+  MirrorSpectralMode,
+  migrateMirrorSpectralMode,
+  applyMirrorSpectralModeToFlags,
+  mirrorSpectralModePropertySchemaEntry,
+  populateMirrorSpectralObjBar,
+  mirrorTintedStrokeStyle
+} from './MirrorSpectralCommon.js';
 import { equationValueForListDisplay } from '../../propertyUtils/equationConversion.js';
 import escapeHtml from 'escape-html';
 
@@ -41,7 +49,7 @@ class ParamMirror extends ParamCurveObjMixin(BaseFilter) {
   static type = 'ParamMirror';
   static isOptical = true;
   static mergesWithGlass = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseFilter.mergeFilterSerializable({
     origin: { x: 0, y: 0 },
     pieces: [
       {
@@ -52,11 +60,22 @@ class ParamMirror extends ParamCurveObjMixin(BaseFilter) {
         tStep: 0.01
       }
     ],
+    mirrorSpectralMode: MirrorSpectralMode.NORMAL,
     filter: false,
     invert: false,
     wavelength: Simulator.GREEN_WAVELENGTH,
     bandwidth: 10
-  };
+  });
+
+  /**
+   * @param {import('../../Scene.js').default} scene
+   * @param {Object|null} jsonObj
+   */
+  constructor(scene, jsonObj) {
+    super(scene, jsonObj);
+    migrateMirrorSpectralMode(this, jsonObj);
+    applyMirrorSpectralModeToFlags(this);
+  }
 
   static getDescription(objData, scene, detailed = false) {
     const base = i18next.t('main:tools.categories.mirror');
@@ -72,6 +91,7 @@ class ParamMirror extends ParamCurveObjMixin(BaseFilter) {
   static getPropertySchema(objData, scene) {
     return [
       ...super.getPropertySchema(objData, scene),
+      mirrorSpectralModePropertySchemaEntry()
     ];
   }
 
@@ -83,8 +103,7 @@ class ParamMirror extends ParamCurveObjMixin(BaseFilter) {
     // Add parametric curve controls
     this.populateObjBarShape(objBar);
     
-    // Add filter controls from BaseFilter
-    super.populateObjBar(objBar);
+    populateMirrorSpectralObjBar(objBar, this);
   }
 
   draw(canvasRenderer, isAboveLight, isHovered) {
@@ -128,8 +147,7 @@ class ParamMirror extends ParamCurveObjMixin(BaseFilter) {
     }
 
     // Draw the parametric curve
-    const colorArray = this.scene.simulator.wavelengthToColor(this.wavelength || Simulator.GREEN_WAVELENGTH, 1);
-    ctx.strokeStyle = isHovered ? this.scene.highlightColorCss : canvasRenderer.rgbaToCssColor(this.scene.simulateColors && this.wavelength && this.filter ? colorArray : this.scene.theme.mirror.color);
+    ctx.strokeStyle = mirrorTintedStrokeStyle(this.scene, this, canvasRenderer, isHovered, this.scene.theme.mirror.color);
     ctx.lineWidth = this.scene.theme.mirror.width * ls;
     
     this.drawPath(canvasRenderer);
@@ -197,30 +215,30 @@ class ParamMirror extends ParamCurveObjMixin(BaseFilter) {
       return;
     }
 
-    // Calculate reflection using the normal vector
-    // Ray direction vector (from p1 to p2, i.e., direction of travel)
-    const rx = ray.p2.x - ray.p1.x;
-    const ry = ray.p2.y - ray.p1.y;
-    const nx = matchingIntersection.normal.x;
-    const ny = matchingIntersection.normal.y;
-    
-    // Normalize the normal vector
-    const normalLength = Math.sqrt(nx * nx + ny * ny);
+    const nx0 = matchingIntersection.normal.x;
+    const ny0 = matchingIntersection.normal.y;
+    const normalLength = Math.sqrt(nx0 * nx0 + ny0 * ny0);
     if (normalLength < 1e-10) {
-      // Degenerate normal - absorb ray
       return;
     }
-    
-    const nnx = nx / normalLength;
-    const nny = ny / normalLength;
-    
-    // Reflect the ray: r' = r - 2(r·n)n
-    const dotProduct = rx * nnx + ry * nny;
-    const reflectedX = rx - 2 * dotProduct * nnx;
-    const reflectedY = ry - 2 * dotProduct * nny;
+    const nnx = nx0 / normalLength;
+    const nny = ny0 / normalLength;
 
-    ray.p1 = incidentPoint;
-    ray.p2 = geometry.point(incidentPoint.x + reflectedX, incidentPoint.y + reflectedY);
+    const applyParamReflection = (r) => {
+      const rx = r.p2.x - r.p1.x;
+      const ry = r.p2.y - r.p1.y;
+      const dotProduct = rx * nnx + ry * nny;
+      const reflectedX = rx - 2 * dotProduct * nnx;
+      const reflectedY = ry - 2 * dotProduct * nny;
+      r.p1 = incidentPoint;
+      r.p2 = geometry.point(incidentPoint.x + reflectedX, incidentPoint.y + reflectedY);
+    };
+
+    const spectral = this.trySpectralReflectanceSplit(ray, incidentPoint, applyParamReflection);
+    if (spectral) {
+      return spectral;
+    }
+    applyParamReflection(ray);
   }
 }
 

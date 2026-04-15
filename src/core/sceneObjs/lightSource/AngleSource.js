@@ -19,6 +19,8 @@ import LineObjMixin from '../LineObjMixin.js';
 import Simulator from '../../Simulator.js';
 import geometry from '../../geometry.js';
 import i18next from 'i18next';
+import { getSpectralBandsForSource } from '../../spectralSourceHelper.js';
+import { populateSpectralSourceSpectrumUi } from '../../spectralSourceObjBar.js';
 
 /**
  * Finite angle point source
@@ -43,7 +45,16 @@ class AngleSource extends LineObjMixin(BaseSceneObj) {
     brightness: 0.5,
     wavelength: Simulator.GREEN_WAVELENGTH,
     emisAngle: 36.001,
-    symmetric: true
+    symmetric: true,
+    spectralMode: 'mono',
+    spectralWavelengths: [],
+    spectralPower: [],
+    blackbodyTempK: 5500,
+    blackbodyPreset: 'custom',
+    ledPeakNm: 550,
+    ledFwhmNm: 30,
+    fluorescentPreset: 'cool_white',
+    sodiumPreset: 'lps'
   };
 
   static getDescription(objData, scene, detailed = false) {
@@ -72,9 +83,7 @@ class AngleSource extends LineObjMixin(BaseSceneObj) {
       obj.brightness = value;
     }, brightnessInfo);
     if (this.scene.simulateColors) {
-      objBar.createNumber(i18next.t('simulator:sceneObjs.common.wavelength') + ' (nm)', Simulator.UV_WAVELENGTH, Simulator.INFRARED_WAVELENGTH, 1, this.wavelength, function (obj, value) {
-        obj.wavelength = value;
-      });
+      populateSpectralSourceSpectrumUi(objBar, this);
     }
     objBar.createNumber(i18next.t('simulator:sceneObjs.common.emisAngle') + ' (°)', 0, 180, 1, this.emisAngle, function (obj, value) {
       obj.emisAngle = value;
@@ -134,6 +143,7 @@ class AngleSource extends LineObjMixin(BaseSceneObj) {
     }
 
     let newRays = [];
+    const bands = getSpectralBandsForSource(this.scene, this);
 
     for (var i = iStart; i < iEnd; i = i + s) {
       var r = Math.sqrt((this.p2.x - this.p1.x) * (this.p2.x - this.p1.x) + (this.p2.y - this.p1.y) * (this.p2.y - this.p1.y));
@@ -143,18 +153,22 @@ class AngleSource extends LineObjMixin(BaseSceneObj) {
       x1 = this.p1.x + r * Math.cos(ang);
       y1 = this.p1.y + r * Math.sin(ang);
 
-      var ray1 = geometry.line(geometry.point(this.p1.x, this.p1.y), geometry.point(x1, y1));
+      for (let b = 0; b < bands.length; b++) {
+        const band = bands[b];
+        var ray1 = geometry.line(geometry.point(this.p1.x, this.p1.y), geometry.point(x1, y1));
 
-      ray1.brightness_s = Math.min(this.brightness / rayDensity, 1) * 0.5;
-      ray1.brightness_p = Math.min(this.brightness / rayDensity, 1) * 0.5;
-      if (this.scene.simulateColors) {
-        ray1.wavelength = this.wavelength;
+        const w = band.weight;
+        ray1.brightness_s = Math.min(this.brightness / rayDensity, 1) * 0.5 * w;
+        ray1.brightness_p = Math.min(this.brightness / rayDensity, 1) * 0.5 * w;
+        if (this.scene.simulateColors) {
+          ray1.wavelength = band.wavelength;
+        }
+        ray1.isNew = true;
+        if (i == iStart && b === 0) {
+          ray1.gap = true;
+        }
+        newRays.push(ray1);
       }
-      ray1.isNew = true;
-      if (i == i0) {
-        ray1.gap = true;
-      }
-      newRays.push(ray1);
     }
 
     return {

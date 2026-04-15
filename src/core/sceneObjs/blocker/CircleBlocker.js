@@ -38,14 +38,14 @@ class CircleBlocker extends CircleObjMixin(BaseFilter) {
   static type = 'CircleBlocker';
   static isOptical = true;
   static mergesWithGlass = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseFilter.mergeFilterSerializable({
     p1: null,
     p2: null,
     filter: false,
     invert: false,
     wavelength: Simulator.GREEN_WAVELENGTH,
     bandwidth: 10
-  };
+  });
 
   static getDescription(objData, scene, detailed = false) {
     return i18next.t('main:tools.CircleBlocker.title');
@@ -90,6 +90,9 @@ class CircleBlocker extends CircleObjMixin(BaseFilter) {
   }
 
   onRayIncident(ray, rayIndex, incidentPoint) {
+    if (this.trySpectralExtinctionPass(ray, incidentPoint)) {
+      return;
+    }
     return {
       isAbsorbed: true
     };

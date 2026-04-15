@@ -301,5 +301,15 @@ export function versionUpdate(jsonData) {
     jsonData.version = 5;
   }
 
+  if (jsonData.version == 5) {
+    if (!jsonData.materialLibrary) {
+      jsonData.materialLibrary = {};
+    }
+    if (jsonData.spectralResolutionNm === undefined) {
+      jsonData.spectralResolutionNm = 10;
+    }
+    jsonData.version = 6;
+  }
+
   return jsonData;
 }

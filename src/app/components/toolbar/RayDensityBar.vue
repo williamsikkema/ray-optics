@@ -16,36 +16,69 @@
 
 <template>
   <div v-if="layout === 'desktop'" class="col-auto d-none d-xl-block">
-    <div class="row justify-content-center">
-      <div 
-        class="btn-group d-flex align-items-center" 
-        role="group" 
+    <div class="d-flex align-items-center flex-wrap gap-3">
+      <div
+        class="d-flex align-items-center gap-2"
         v-tooltip-popover:[tooltipType]="{
           content: $t('simulator:settings.rayDensity.description'),
           offset: [0, 25]
         }"
       >
-        <button class="btn shadow-none range-minus-btn" id="rayDensityMinus" @click="(e) => { decreaseDensity(); e.target.blur(); }">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-dash" viewBox="0 0 16 16">
-            <path d="M4 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 8z"/>
-          </svg>
-        </button>
-        <input type="range" 
-          class="form-range toolbar-range" 
-          min="-3" 
-          max="3" 
-          step="0.0001" 
-          v-model="rayDensity"
-          @click="e => e.target.blur()"
-        >
-        <button class="btn shadow-none range-plus-btn" id="rayDensityPlus" @click="(e) => { increaseDensity(); e.target.blur(); }">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus" viewBox="0 0 16 16">
-            <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
-          </svg>
-        </button>
+        <span class="title text-nowrap">{{ $t('simulator:settings.rayDensity.title') }}</span>
+        <div class="btn-group d-flex align-items-center" role="group">
+          <button class="btn shadow-none range-minus-btn" id="rayDensityMinus" @click="(e) => { decreaseDensity(); e.target.blur(); }">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-dash" viewBox="0 0 16 16">
+              <path d="M4 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 8z"/>
+            </svg>
+          </button>
+          <input type="range"
+            class="form-range toolbar-range"
+            min="-3"
+            max="3"
+            step="0.0001"
+            v-model="rayDensity"
+            @click="e => e.target.blur()"
+          >
+          <button class="btn shadow-none range-plus-btn" id="rayDensityPlus" @click="(e) => { increaseDensity(); e.target.blur(); }">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus" viewBox="0 0 16 16">
+              <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div
+        v-if="simulateColors"
+        class="d-flex align-items-center gap-2"
+        v-tooltip-popover:[tooltipType]="{
+          content: $t('simulator:settings.spectralDensity.description'),
+          offset: [0, 25]
+        }"
+      >
+        <span class="title text-nowrap">{{ $t('simulator:settings.spectralDensity.title') }}</span>
+        <span class="title text-nowrap">{{ spectralDensity }}&nbsp;nm</span>
+        <div class="btn-group d-flex align-items-center" role="group">
+          <button class="btn shadow-none range-minus-btn" @click="(e) => { decreaseSpectralDensity(); e.target.blur(); }">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-dash" viewBox="0 0 16 16">
+              <path d="M4 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 8z"/>
+            </svg>
+          </button>
+          <input
+            type="range"
+            class="form-range toolbar-range"
+            min="1"
+            max="320"
+            step="1"
+            v-model="spectralDensity"
+            @click="e => e.target.blur()"
+          >
+          <button class="btn shadow-none range-plus-btn" @click="(e) => { increaseSpectralDensity(); e.target.blur(); }">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus" viewBox="0 0 16 16">
+              <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
-    <div class="row justify-content-center title">{{ $t('simulator:settings.rayDensity.title') }}</div>
   </div>
 
   <div v-if="layout === 'tablet'" 
@@ -80,6 +113,38 @@
     <hr class="dropdown-divider">
   </div>
 
+  <div v-if="layout === 'tablet' && simulateColors"
+    class="row d-flex d-xl-none justify-content-between align-items-center"
+    v-tooltip-popover:[tooltipType]="{
+      content: $t('simulator:settings.spectralDensity.description'),
+      placement: 'left',
+      offset: [0, 20]
+    }"
+  >
+    <div class="col-auto">{{ $t('simulator:settings.spectralDensity.title') }}</div>
+    <div class="btn-group col-auto d-flex align-items-center" role="group">
+      <button class="btn shadow-none range-minus-btn" @click="(e) => { decreaseSpectralDensity(); e.target.blur(); }">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-dash" viewBox="0 0 16 16">
+          <path d="M4 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 8z"/>
+        </svg>
+      </button>
+      <input type="range"
+        class="form-range toolbar-range"
+        min="1"
+        max="320"
+        step="1"
+        v-model="spectralDensity"
+        @click="e => e.target.blur()"
+      >
+      <button class="btn shadow-none range-plus-btn" @click="(e) => { increaseSpectralDensity(); e.target.blur(); }">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus" viewBox="0 0 16 16">
+          <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+        </svg>
+      </button>
+    </div>
+    <hr class="dropdown-divider">
+  </div>
+
   <div v-if="layout === 'mobile'" class="row d-flex justify-content-between align-items-center">
     <div class="col-auto settings-label">{{ $t('simulator:settings.rayDensity.title') }}</div>
     <div class="col-auto d-flex align-items-center">
@@ -97,6 +162,29 @@
         @click="e => e.target.blur()"
       >
       <button class="btn range-plus-btn" id="rayDensityPlus_mobile" @click="(e) => { increaseDensity(); e.target.blur(); }">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus" viewBox="0 0 16 16">
+          <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+  <div v-if="layout === 'mobile' && simulateColors" class="row d-flex justify-content-between align-items-center">
+    <div class="col-auto settings-label">{{ $t('simulator:settings.spectralDensity.title') }}</div>
+    <div class="col-auto d-flex align-items-center">
+      <button class="btn range-minus-btn" @click="(e) => { decreaseSpectralDensity(); e.target.blur(); }">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-dash" viewBox="0 0 16 16">
+          <path d="M4 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 8z"/>
+        </svg>
+      </button>
+      <input type="range"
+        class="form-range toolbar-range"
+        min="1"
+        max="320"
+        step="1"
+        v-model="spectralDensity"
+        @click="e => e.target.blur()"
+      >
+      <button class="btn range-plus-btn" @click="(e) => { increaseSpectralDensity(); e.target.blur(); }">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus" viewBox="0 0 16 16">
           <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
         </svg>
@@ -151,6 +239,15 @@ export default {
       }
     })
 
+    const simulateColors = toRef(scene, 'simulateColors')
+    const spectralResolutionNm = toRef(scene, 'spectralResolutionNm')
+    const spectralDensity = computed({
+      get: () => Number(spectralResolutionNm.value) || 10,
+      set: (value) => {
+        spectralResolutionNm.value = Math.max(1, Math.min(320, Math.round(Number(value) || 10)))
+      }
+    })
+
     const increaseDensity = () => {
       const newValue = rayDensity.value + 0.1
       rayDensity.value = newValue
@@ -161,11 +258,23 @@ export default {
       rayDensity.value = newValue
     }
 
+    const increaseSpectralDensity = () => {
+      spectralDensity.value = spectralDensity.value + 1
+    }
+
+    const decreaseSpectralDensity = () => {
+      spectralDensity.value = spectralDensity.value - 1
+    }
+
     return {
       tooltipType,
       rayDensity,
       increaseDensity,
-      decreaseDensity
+      decreaseDensity,
+      simulateColors,
+      spectralDensity,
+      increaseSpectralDensity,
+      decreaseSpectralDensity
     }
   }
 }

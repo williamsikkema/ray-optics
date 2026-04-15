@@ -40,7 +40,7 @@ class ParamGlass extends ParamCurveObjMixin(BaseGlass) {
   static type = 'ParamGlass';
   static isOptical = true;
   static mergesWithGlass = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseGlass.mergeGlassSerializable({
     origin: { x: 0, y: 0 },
     pieces: [
       {
@@ -54,7 +54,7 @@ class ParamGlass extends ParamCurveObjMixin(BaseGlass) {
     refIndex: 1.5,
     cauchyB: 0.004,
     partialReflect: true
-  };
+  });
 
   static getDescription(objData, scene, detailed = false) {
     const base = i18next.t('main:tools.categories.glass');

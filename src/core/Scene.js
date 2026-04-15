@@ -16,6 +16,7 @@
 
 import * as sceneObjs from './sceneObjs.js';
 import { versionUpdate } from './versionUpdate.js';
+import { ensurePresetMaterials } from './materials/presets.js';
 import i18next from 'i18next';
 import seedrandom from 'seedrandom';
 
@@ -23,7 +24,7 @@ import seedrandom from 'seedrandom';
  * The version of the JSON data format of the scene, which matches the major version number of the app starting from version 5.0.
  * @const {number}
  */
-export const DATA_VERSION = 5;
+export const DATA_VERSION = 6;
 
 /**
  * Recursively merge a nested object with its defaults.
@@ -213,7 +214,7 @@ class Scene {
     scale: 1,
     width: 1500,
     height: 900,
-    simulateColors: false,
+    simulateColors: true,
     redWavelength: 620,
     violetWavelength: 420,
     colorMode: 'default',
@@ -221,6 +222,8 @@ class Scene {
     symbolicBodyMerging: false,
     maxRayDepth: Infinity,
     randomSeed: null,
+    materialLibrary: {},
+    spectralResolutionNm: 10,
     theme: {
       background: {
         color: { r: 0, g: 0, b: 0 }
@@ -580,6 +583,8 @@ class Scene {
         }
         this.objs.push(new sceneObjs[objData.type](this, objData));
       }
+
+      ensurePresetMaterials(this);
 
       // If there's an error, stop importing
       if (this.error) {

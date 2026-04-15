@@ -45,6 +45,9 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-primary" data-bs-dismiss="modal" @click="handleSave" v-html="$t('simulator:file.save.title')">
           </button>
+          <button type="button" class="btn btn-primary" data-bs-dismiss="modal" @click="handleSaveZip">
+            Save as ZIP
+          </button>
           <button type="button" class="btn btn-primary" data-bs-dismiss="modal" @click="handleRename" v-html="$t('simulator:saveModal.rename')">
           </button>
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" v-html="$t('simulator:common.cancelButton')">
@@ -90,6 +93,13 @@ export default {
       }
     }
 
+    const handleSaveZip = () => {
+      sceneStore.name.value = modalName.value
+      if (app.saveZip) {
+        app.saveZip()
+      }
+    }
+
     const handleRename = () => {
       sceneStore.name.value = modalName.value
     }
@@ -106,6 +116,7 @@ export default {
       modalName,
       isModalOpen,
       handleSave,
+      handleSaveZip,
       handleRename,
       closeModal
     }

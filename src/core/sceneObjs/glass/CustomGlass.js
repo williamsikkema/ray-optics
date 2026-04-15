@@ -43,7 +43,7 @@ class CustomGlass extends LineObjMixin(BaseGlass) {
   static type = 'CustomGlass';
   static isOptical = true;
   static mergesWithGlass = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseGlass.mergeGlassSerializable({
     p1: null,
     p2: null,
     eqn1: "0",
@@ -51,7 +51,7 @@ class CustomGlass extends LineObjMixin(BaseGlass) {
     refIndex: 1.5,
     cauchyB: 0.004,
     partialReflect: true
-  };
+  });
 
   static getDescription(objData, scene, detailed = false) {
     const base = i18next.t('main:tools.categories.glass');

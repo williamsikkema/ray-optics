@@ -25,6 +25,7 @@ describe('SphericalLens', () => {
 
   beforeEach(() => {
     scene = new Scene();
+    scene.simulateColors = false; // Stable numeric expectations (global default may be true)
     scene.gridSize = 20; // Set grid size
     obj = new SphericalLens(scene);
     user = new MockUser(obj);

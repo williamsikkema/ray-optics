@@ -29,6 +29,7 @@ import i18next, { t, use } from 'i18next';
 import { jsonEditorService } from '../services/jsonEditor.js';
 import { statusEmitter, STATUS_EVENT_NAMES } from '../composables/useStatus.js';
 import { mapURL, parseLinks } from '../utils/links.js';
+import { exportSceneToZipBlob, importSceneFromZip } from '../../core/zipSceneExport.js';
 
 function initScene() {
   scene = new Scene();
@@ -1155,7 +1156,45 @@ function save() {
   hasUnsavedChange = false;
 }
 
+async function saveZip() {
+  rename();
+  try {
+    const blob = await exportSceneToZipBlob(scene);
+    saveAs(blob, (scene.name || "scene") + ".zip");
+    var saveModal = bootstrap.Modal.getInstance(document.getElementById('saveModal'));
+    if (saveModal) {
+      saveModal.hide();
+    }
+    hasUnsavedChange = false;
+  } catch (e) {
+    error = "saveZip: " + e;
+    updateErrorAndWarning();
+  }
+}
+
 function openFile(readFile) {
+  if (!readFile) {
+    return;
+  }
+  const isZip = readFile.name && readFile.name.toLowerCase().endsWith('.zip');
+  if (isZip || readFile.type === 'application/zip' || readFile.type === 'application/x-zip-compressed') {
+    var zreader = new FileReader();
+    zreader.readAsArrayBuffer(readFile);
+    zreader.onload = async function (evt) {
+      try {
+        const json = await importSceneFromZip(evt.target.result);
+        editor.loadJSON(json);
+        hasUnsavedChange = false;
+        editor.onActionComplete();
+        jsonEditorService.updateContent(editor.lastActionJson, null, true);
+      } catch (e) {
+        error = "openFile (zip): " + e;
+        updateErrorAndWarning();
+      }
+    };
+    return;
+  }
+
   var reader = new FileReader();
   reader.readAsText(readFile);
   reader.onload = function (evt) {
@@ -1237,6 +1276,7 @@ export const app = {
   hideWelcome,
   rename,
   save,
+  saveZip,
   syncUrl,
   setHasUnsavedChange,
   importModulesFromSceneFile,

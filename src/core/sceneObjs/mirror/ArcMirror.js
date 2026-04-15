@@ -18,6 +18,14 @@ import BaseFilter from '../BaseFilter.js';
 import i18next from 'i18next';
 import Simulator from '../../Simulator.js';
 import geometry from '../../geometry.js';
+import {
+  MirrorSpectralMode,
+  migrateMirrorSpectralMode,
+  applyMirrorSpectralModeToFlags,
+  mirrorSpectralModePropertySchemaEntry,
+  populateMirrorSpectralObjBar,
+  mirrorTintedStrokeStyle
+} from './MirrorSpectralCommon.js';
 
 /**
  * Mirror with shape of a circular arc.
@@ -38,15 +46,26 @@ class ArcMirror extends BaseFilter {
   static type = 'ArcMirror';
   static isOptical = true;
   static mergesWithGlass = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseFilter.mergeFilterSerializable({
     p1: null,
     p2: null,
     p3: null,
+    mirrorSpectralMode: MirrorSpectralMode.NORMAL,
     filter: false,
     invert: false,
     wavelength: Simulator.GREEN_WAVELENGTH,
     bandwidth: 10
-  };
+  });
+
+  /**
+   * @param {import('../../Scene.js').default} scene
+   * @param {Object|null} jsonObj
+   */
+  constructor(scene, jsonObj) {
+    super(scene, jsonObj);
+    migrateMirrorSpectralMode(this, jsonObj);
+    applyMirrorSpectralModeToFlags(this);
+  }
 
   static getDescription(objData, scene, detailed = false) {
     return i18next.t('main:meta.parentheses', { main: i18next.t('main:tools.categories.mirror'), sub: i18next.t('main:tools.ArcMirror.title') });
@@ -58,6 +77,7 @@ class ArcMirror extends BaseFilter {
       { key: 'p2', type: 'point', label: i18next.t('simulator:sceneObjs.LineObjMixin.endpoint2') },
       { key: 'p3', type: 'point', label: i18next.t('simulator:sceneObjs.ArcMirror.pointOnArc') },
       ...super.getPropertySchema(objData, scene),
+      mirrorSpectralModePropertySchemaEntry()
     ];
   }
 
@@ -162,7 +182,7 @@ class ArcMirror extends BaseFilter {
       }
     }
 
-    super.populateObjBar(objBar);
+    populateMirrorSpectralObjBar(objBar, this);
   }
 
   draw(canvasRenderer, isAboveLight, isHovered) {
@@ -177,8 +197,7 @@ class ArcMirror extends BaseFilter {
         var a1 = Math.atan2(this.p1.y - center.y, this.p1.x - center.x);
         var a2 = Math.atan2(this.p2.y - center.y, this.p2.x - center.x);
         var a3 = Math.atan2(this.p3.y - center.y, this.p3.x - center.x);
-        const colorArray = this.scene.simulator.wavelengthToColor(this.wavelength || Simulator.GREEN_WAVELENGTH, 1);
-        ctx.strokeStyle = isHovered ? this.scene.highlightColorCss : canvasRenderer.rgbaToCssColor(this.scene.simulateColors && this.wavelength && this.filter ? colorArray : this.scene.theme.mirror.color);
+        ctx.strokeStyle = mirrorTintedStrokeStyle(this.scene, this, canvasRenderer, isHovered, this.scene.theme.mirror.color);
         ctx.lineWidth = this.scene.theme.mirror.width * ls;
         ctx.beginPath();
         ctx.arc(center.x, center.y, r, a1, a2, (a2 < a3 && a3 < a1) || (a1 < a2 && a2 < a3) || (a3 < a1 && a1 < a2));
@@ -198,8 +217,7 @@ class ArcMirror extends BaseFilter {
         }
       } else {
         // The three points on the arc is colinear. Treat as a line segment.
-        const colorArray = this.scene.simulator.wavelengthToColor(this.wavelength || Simulator.GREEN_WAVELENGTH, 1);
-        ctx.strokeStyle = isHovered ? this.scene.highlightColorCss : canvasRenderer.rgbaToCssColor(this.scene.simulateColors && this.wavelength && this.filter ? colorArray : this.scene.theme.mirror.color);
+        ctx.strokeStyle = mirrorTintedStrokeStyle(this.scene, this, canvasRenderer, isHovered, this.scene.theme.mirror.color);
         ctx.lineWidth = this.scene.theme.mirror.width * ls;
         ctx.beginPath();
         ctx.moveTo(this.p1.x, this.p1.y);
@@ -484,30 +502,33 @@ class ArcMirror extends BaseFilter {
   }
 
   onRayIncident(ray, rayIndex, incidentPoint) {
-    var rx = ray.p1.x - incidentPoint.x;
-    var ry = ray.p1.y - incidentPoint.y;
-    var mx = this.p2.x - this.p1.x;
-    var my = this.p2.y - this.p1.y;
+    const applyArcReflection = (r) => {
+      var rx = r.p1.x - incidentPoint.x;
+      var ry = r.p1.y - incidentPoint.y;
 
-    var center = geometry.linesIntersection(geometry.perpendicularBisector(geometry.line(this.p1, this.p3)), geometry.perpendicularBisector(geometry.line(this.p2, this.p3)));
-    if (isFinite(center.x) && isFinite(center.y)) {
-      var cx = center.x - incidentPoint.x;
-      var cy = center.y - incidentPoint.y;
-      var c_sq = cx * cx + cy * cy;
-      var r_dot_c = rx * cx + ry * cy;
-      ray.p1 = incidentPoint;
-      ray.p2 = geometry.point(incidentPoint.x - c_sq * rx + 2 * r_dot_c * cx, incidentPoint.y - c_sq * ry + 2 * r_dot_c * cy);
-    } else {
-      // The three points on the arc is colinear. Treat as a line segment.
+      var center = geometry.linesIntersection(geometry.perpendicularBisector(geometry.line(this.p1, this.p3)), geometry.perpendicularBisector(geometry.line(this.p2, this.p3)));
+      if (isFinite(center.x) && isFinite(center.y)) {
+        var cx = center.x - incidentPoint.x;
+        var cy = center.y - incidentPoint.y;
+        var c_sq = cx * cx + cy * cy;
+        var r_dot_c = rx * cx + ry * cy;
+        r.p1 = incidentPoint;
+        r.p2 = geometry.point(incidentPoint.x - c_sq * rx + 2 * r_dot_c * cx, incidentPoint.y - c_sq * ry + 2 * r_dot_c * cy);
+      } else {
+        // The three points on the arc is colinear. Treat as a line segment.
 
-      var rx = ray.p1.x - incidentPoint.x;
-      var ry = ray.p1.y - incidentPoint.y;
-      var mx = this.p2.x - this.p1.x;
-      var my = this.p2.y - this.p1.y;
+        var mx = this.p2.x - this.p1.x;
+        var my = this.p2.y - this.p1.y;
 
-      ray.p1 = incidentPoint;
-      ray.p2 = geometry.point(incidentPoint.x + rx * (my * my - mx * mx) - 2 * ry * mx * my, incidentPoint.y + ry * (mx * mx - my * my) - 2 * rx * mx * my);
+        r.p1 = incidentPoint;
+        r.p2 = geometry.point(incidentPoint.x + rx * (my * my - mx * mx) - 2 * ry * mx * my, incidentPoint.y + ry * (mx * mx - my * my) - 2 * rx * mx * my);
+      }
+    };
+    const spectral = this.trySpectralReflectanceSplit(ray, incidentPoint, applyArcReflection);
+    if (spectral) {
+      return spectral;
     }
+    applyArcReflection(ray);
   }
 };
 

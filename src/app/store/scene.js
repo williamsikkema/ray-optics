@@ -63,6 +63,9 @@ const PROPERTY_CALLBACKS = {
     app.editor.selectObj(app.editor.selectedObjIndex)
     app.simulator?.updateSimulation(false, true)
   },
+  spectralResolutionNm: (value) => {
+    app.simulator?.updateSimulation(false, true)
+  },
   showRayArrows: (value) => {
     app.simulator?.updateSimulation(false, true)
   },
@@ -160,26 +163,30 @@ export const useSceneStore = () => {
       computed({
         get: () => state[key],
         set: (newValue) => {
+          const clampedZoomValue =
+            key === 'zoom'
+              ? Math.max(0.25, Math.min(10, Number(newValue) || 1))
+              : newValue
           if (app.scene) {
             if (key === 'observerSize') {
               if (app.scene.observer) {
-                app.scene.observer.r = newValue * 0.5
+                app.scene.observer.r = clampedZoomValue * 0.5
               }
             } else if (key === 'zoom') {
-              app.editor.setScale(newValue / app.scene.lengthScale)
+              app.editor.setScale(clampedZoomValue / app.scene.lengthScale)
             } else if (key === 'moduleIds') {
               // moduleIds is just for tracking, no need to sync back to scene
-              state[key] = newValue
+              state[key] = clampedZoomValue
             } else {
-              app.scene[key] = newValue
+              app.scene[key] = clampedZoomValue
               // Update zoom when scale or lengthScale changes
               if (key === 'scale' || key === 'lengthScale') {
                 state.zoom = app.scene.scale * app.scene.lengthScale
               }
             }
             if (key !== 'moduleIds') {
-              state[key] = newValue
-              PROPERTY_CALLBACKS[key]?.(newValue, state)
+              state[key] = clampedZoomValue
+              PROPERTY_CALLBACKS[key]?.(clampedZoomValue, state)
             }
           }
           app.editor.onActionComplete()

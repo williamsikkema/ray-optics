@@ -39,7 +39,7 @@ class Aperture extends BaseFilter {
   static type = 'Aperture';
   static isOptical = true;
   static mergesWithGlass = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseFilter.mergeFilterSerializable({
     p1: null,
     p2: null,
     p3: null,
@@ -48,7 +48,7 @@ class Aperture extends BaseFilter {
     invert: false,
     wavelength: Simulator.GREEN_WAVELENGTH,
     bandwidth: 10
-  };
+  });
 
   static getDescription(objData, scene, detailed = false) {
     return i18next.t('main:tools.Aperture.title');
@@ -357,6 +357,9 @@ class Aperture extends BaseFilter {
   }
 
   onRayIncident(ray, rayIndex, incidentPoint) {
+    if (this.trySpectralExtinctionPass(ray, incidentPoint)) {
+      return;
+    }
     return {
       isAbsorbed: true
     };

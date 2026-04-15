@@ -41,7 +41,7 @@ class SphericalLens extends Glass {
   static type = 'SphericalLens';
   static isOptical = true;
   static mergesWithGlass = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseGlass.mergeGlassSerializable({
     path: null,
     defBy: 'DR1R2',
     p1: null,
@@ -50,7 +50,7 @@ class SphericalLens extends Glass {
     refIndex: 1.5,
     cauchyB: 0.004,
     partialReflect: true
-  };
+  });
 
   static getDescription(objData, scene, detailed = false) {
     return i18next.t('main:tools.SphericalLens.title');
@@ -142,7 +142,27 @@ class SphericalLens extends Glass {
       }, null, true);
     }
 
-    if (this.scene.simulateColors) {
+    const matKeys = Object.keys(this.scene.materialLibrary || {}).sort();
+    if (matKeys.length) {
+      const opts = { '': '(Cauchy A/B)' };
+      for (const k of matKeys) {
+        opts[k] = k;
+      }
+      objBar.createDropdown('Material preset', this.materialId || '', opts, function (obj, value) {
+        obj.materialId = value;
+      }, '<p>Use a material from the scene library (n vs λ), or leave empty for Cauchy coefficients.</p><p>When several glasses overlap, the highest stack priority sets the effective index.</p>');
+    }
+
+    if (!this.scene.simulateColors) {
+      objBar.createNumber(i18next.t('simulator:sceneObjs.BaseGlass.refIndex') + '*', 0.5, 2.5, 0.01, this.refIndex, function (obj, value) {
+        var old_params = obj.getDFfdBfd();
+        obj.refIndex = value * 1;
+        if (obj.defBy == 'DFfdBfd') {
+          // If the lens is defined by d,ffd,bfd, we need to rebuild the lens with the new refractive index so that the focal distances are correct.
+          obj.createLensWithDFfdBfd(old_params.d, old_params.ffd, old_params.bfd);
+        }
+      }, '<p>*' + i18next.t('simulator:sceneObjs.BaseGlass.refIndexInfo.relative') + '</p><p>' + i18next.t('simulator:sceneObjs.BaseGlass.refIndexInfo.effective') + '</p>');
+    } else if (!this.materialId) {
       objBar.createNumber(i18next.t('simulator:sceneObjs.BaseGlass.cauchyCoeff') + " A", 1, 3, 0.01, this.refIndex, function (obj, value) {
         var old_params = obj.getDFfdBfd();
         obj.refIndex = value * 1;
@@ -159,15 +179,6 @@ class SphericalLens extends Glass {
           obj.createLensWithDFfdBfd(old_params.d, old_params.ffd, old_params.bfd);
         }
       });
-    } else {
-      objBar.createNumber(i18next.t('simulator:sceneObjs.BaseGlass.refIndex') + '*', 0.5, 2.5, 0.01, this.refIndex, function (obj, value) {
-        var old_params = obj.getDFfdBfd();
-        obj.refIndex = value * 1;
-        if (obj.defBy == 'DFfdBfd') {
-          // If the lens is defined by d,ffd,bfd, we need to rebuild the lens with the new refractive index so that the focal distances are correct.
-          obj.createLensWithDFfdBfd(old_params.d, old_params.ffd, old_params.bfd);
-        }
-      }, '<p>*' + i18next.t('simulator:sceneObjs.BaseGlass.refIndexInfo.relative') + '</p><p>' + i18next.t('simulator:sceneObjs.BaseGlass.refIndexInfo.effective') + '</p>');
     }
 
     if (objBar.showAdvanced(!this.arePropertiesDefault(['partialReflect']))) {

@@ -51,6 +51,10 @@
       "title": "Ray Density",
       "description": "Determines the number of rays to be emitted by beams and point sources. This also affects the accuracy of image detection and color rendering."
     },
+    "spectralDensity": {
+      "title": "Spectral density",
+      "description": "Bin width for multi-wavelength rays and spectral plots (1–320 nm)."
+    },
     "layoutAids": {
       "title": "Layout Aids",
       "showGrid": "Grid",
@@ -218,6 +222,15 @@
       "filter": "Filter",
       "bandwidth": "Bandwidth",
       "invert": "Invert"
+    },
+    "Mirror": {
+      "spectralMode": "Spectral response",
+      "spectralModeInfo": "<p><b>Normal</b>: wavelength-independent mirror.</p><p><b>Filter (band)</b>: rectangular band (center ± bandwidth); use Invert for band-stop.</p><p><b>Dichroic R(λ)</b>: linear reflectance edge from center − bandwidth (full reflect) to center + bandwidth (full transmission through the mirror); use Invert to swap sides. Optional: tabular R(λ) in JSON overrides this curve.</p>",
+      "modeNormal": "Normal",
+      "modeFilter": "Filter (band)",
+      "modeDichroic": "Dichroic R(λ)",
+      "invert": "Invert",
+      "invertInfo": "Filter mode: swap band-pass vs band-stop. Dichroic mode: swap which side of the edge is high-R vs low-R (same idea as filter)."
     },
     "IdealMirror": {
       "cartesianSign": "Cartesian Sign Convention"

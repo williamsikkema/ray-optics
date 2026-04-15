@@ -38,14 +38,14 @@ class CurveGlass extends BaseGlass {
   static type = 'CurveGlass';
   static isOptical = true;
   static mergesWithGlass = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseGlass.mergeGlassSerializable({
     points: [],
     notDone: false,
     refIndex: 1.5,
     cauchyB: 0.004,
     partialReflect: true
-  }
-  
+  });
+
   /**
    * @param {Scene} scene - The scene the object belongs to.
    * @param {Object|null} jsonObj - The JSON object to be deserialized, if any.

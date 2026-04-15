@@ -15,6 +15,7 @@
  */
 
 import BaseGrinGlass from '../BaseGrinGlass.js';
+import BaseGlass from '../BaseGlass.js';
 import ParamCurveObjMixin from '../ParamCurveObjMixin.js';
 import i18next from 'i18next';
 import geometry from '../../geometry.js';
@@ -38,7 +39,7 @@ class ParamGrinGlass extends ParamCurveObjMixin(BaseGrinGlass) {
   static type = 'ParamGrinGlass';
   static isOptical = true;
   static mergesWithGlass = true;
-  static serializableDefaults = {
+  static serializableDefaults = BaseGlass.mergeGlassSerializable({
     origin: { x: 0, y: 0 },
     pieces: [
       {
@@ -54,7 +55,7 @@ class ParamGrinGlass extends ParamCurveObjMixin(BaseGrinGlass) {
     stepSize: 1,
     intersectTol: 1e-3,
     partialReflect: true
-  };
+  });
 
   static getDescription(objData, scene, detailed = false) {
     return i18next.t('main:tools.ParamGrinGlass.title');

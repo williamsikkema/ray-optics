@@ -25,6 +25,7 @@
     "i18next-http-backend": "^2.6.2",
     "jquery": "^3.7.1",
     "json-url": "^3.1.0",
+    "jszip": "^3.10.1",
     "mathjs": "^15.2.0",
     "mathquill": "github:Jutanium/mathquill-webpack",
     "sass": "^1.80.3",
@@ -52,9 +53,10 @@
     "simple-git": "^3.32.3"
   },
   "scripts": {
-    "test": "npm run test:propertyUtils && npm run test:sceneObjs && npm run test:scenes",
+    "test": "npm run test:propertyUtils && npm run test:sceneObjs && npm run test:core && npm run test:scenes",
     "test:propertyUtils": "jest test/propertyUtils",
     "test:sceneObjs": "jest test/sceneObjs",
+    "test:core": "jest test/core",
     "test:scenes": "npm run build-node && jest test/scenes",
     "build-pages": "node ./scripts/buildPages.mjs",
     "build-pages:release": "node ./scripts/buildPages.mjs --release",

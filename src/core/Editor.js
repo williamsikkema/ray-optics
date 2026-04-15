@@ -454,6 +454,8 @@ class Editor {
 
     let lastZoomTime = 0;
     let zoomThrottle = 16; // ~60fps for smoother feel
+    const MIN_ZOOM = 0.25;
+    const MAX_ZOOM = 10.0;
 
     this.canvas.addEventListener('wheel', function (e) {
       e.preventDefault(); // Prevent default scrolling
@@ -478,7 +480,7 @@ class Editor {
       }
       
       // Clamp scale between min and max values
-      newScale = Math.max(0.25, Math.min(5.00, newScale));
+      newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newScale));
       
       // Convert to percentage scale
       const finalScale = newScale * 100;
@@ -566,7 +568,7 @@ class Editor {
         // Update scale based on previous scale and scaling factor
         let newScale = lastScale * scaleFactor;
 
-        newScale = Math.max(0.25 / self.scene.lengthScale, Math.min(5.00 / self.scene.lengthScale, newScale));
+        newScale = Math.max(MIN_ZOOM / self.scene.lengthScale, Math.min(MAX_ZOOM / self.scene.lengthScale, newScale));
 
         // Calculate the mid point between the two touches
         const x = (e.touches[0].pageX + e.touches[1].pageX) / 2;

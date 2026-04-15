@@ -152,6 +152,16 @@ export function createMockObjBar() {
       return control;
     },
 
+    createNote: function(content) {
+      const control = {
+        type: 'note',
+        label: '',
+        content
+      };
+      this.controls.push(control);
+      return control;
+    },
+
     createStrokeStyleControl: function(label, currentStyle, themeStyle, onUpdate, onReset) {
       const control = {
         label,
@@ -179,15 +189,6 @@ export function createMockObjBar() {
         reset: () => {
           onReset(this.targetObj);
         }
-      };
-      this.controls.push(control);
-      return control;
-    },
-
-    createNote: function(content) {
-      const control = {
-        type: 'note',
-        content
       };
       this.controls.push(control);
       return control;
